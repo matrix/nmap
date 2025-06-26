@@ -21,10 +21,10 @@ test_addrset() {
 	result=$(echo $result)
 	TESTS=$(expr $TESTS + 1);
 	if [ "$ret" != "0" ]; then
-		echo "FAIL $ADDRSET returned $ret."
+		echo "FAIL $specs: $ADDRSET returned $ret."
 		TEST_FAIL=$(expr $TEST_FAIL + 1)
 	elif [ "$result" != "$expected" ]; then
-		echo "FAIL \"$result\" !="
+		echo "FAIL $specs: \"$result\" !="
 		echo "     \"$expected\"."
 		TEST_FAIL=$(expr $TEST_FAIL + 1)
 	else
@@ -36,8 +36,8 @@ test_addrset() {
 # Takes as an argument a host specification with invalid syntax. The
 # test passes if addrset returns with a non-zero exit code.
 expect_fail() {
-	specs=$1
-	$ADDRSET $specs < /dev/null 2> /dev/null
+	specs="$1"
+	$ADDRSET "$specs" < /dev/null 2> /dev/null
 	ret=$?
 	TESTS=$(expr $TESTS + 1)
 	if [ "$ret" = "0" ]; then
@@ -206,6 +206,25 @@ test_addrset "1:2::0003/120" "1:2::3 1:2::0 1:2::ff" <<EOF
 1:2::ff
 1:2::1ff
 1:3::3
+EOF
+
+# IPv6 CIDR netmask.
+test_addrset "1:2::3:4:5/95" "1:2::3:4:5 1:2::2:0:0 1:2::3:ffff:ffff" <<EOF
+1:2::3:4:5
+1:2::1:ffff:ffff
+1:2::2:0:0
+1:2::3:ffff:ffff
+1:2::4:0:0
+1:3::3
+EOF
+
+# IPv6 CIDR netmask.
+test_addrset "11::2/15" "11::2:3:4:5 10::1 11:ffff:ffff:ffff:ffff:ffff:ffff:ffff" <<EOF
+11::2:3:4:5
+9:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+10::1
+11:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+12::0
 EOF
 
 # /128 netmask.

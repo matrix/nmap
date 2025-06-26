@@ -322,7 +322,7 @@ function init_account(host)
   end
 end
 
----Generate the Lanman v1 hash (LMv1).
+--Generate the Lanman v1 hash (LMv1).
 --
 -- The generated hash is incredibly easy to reverse, because the input is
 -- padded or truncated to 14 characters, then split into two 7-character
@@ -593,7 +593,7 @@ end
 -- concatenating the server challenge and the client nonce. The ntlm session hash
 -- is first 8 bytes of the md5 hash of the session nonce.
 -- The ntlm response is the lm response with session hash as challenge.
--- @param ntlm_passsword_hash The md4 hash of the utf-16 password.
+-- @param ntlm_password_hash The md4 hash of the utf-16 password.
 -- @param challenge The challenge sent by the server.
 function ntlmv2_session_response(ntlm_password_hash, challenge)
   local client_nonce = openssl.rand_bytes(8)
@@ -628,7 +628,7 @@ end
 --                   be generated properly).
 --@return lm_response, to be send directly back to the server
 --@return ntlm_response, to be send directly back to the server
---@reutrn mac_key used for message signing.
+--@return mac_key used for message signing.
 function get_password_response(ip, username, domain, password, password_hash, hash_type, challenge, is_extended)
   local status
   local lm_hash   = nil

@@ -22,6 +22,12 @@ You may select a category if you wish to reduce the number of requests. We have 
 * <code>virtualization</code> - Virtualization systems
 * <code>console</code> - Remote consoles
 
+You can also select a specific fingerprint or a brand, such as BIG-IQ or Siemens. This matching is based on case-insensitive words. This means that "nas" will select Seagate BlackArmor NAS storage but not Netgear ReadyNAS.
+
+For a fingerprint to be used it needs to satisfy both the category and name criteria.
+
+By default, the script produces output only when default credentials are found, while staying silent when the target only matches some fingerprints (but no credentials are found). With increased verbosity (option -v), the script will also report all matching fingerprints.
+
 Please help improve this script by adding new entries to nselib/data/http-default-accounts.lua
 
 Remember each fingerprint must have:
@@ -76,7 +82,8 @@ This script was based on http-enum.
 --
 -- @args http-default-accounts.basepath Base path to append to requests. Default: "/"
 -- @args http-default-accounts.fingerprintfile Fingerprint filename. Default: http-default-accounts-fingerprints.lua
--- @args http-default-accounts.category Selects a category of fingerprints to use.
+-- @args http-default-accounts.category Selects a fingerprint category (or a list of categories).
+-- @args http-default-accounts.name Selects fingerprints by a word (or a list of alternate words) included in their names.
 
 -- Revision History
 -- 2013-08-13 nnposter
@@ -93,6 +100,10 @@ This script was based on http-enum.
 --   * changed classic output to report empty credentials as <blank>
 -- 2016-12-04 nnposter
 --   * added CPE entries to individual fingerprints (where known)
+-- 2018-12-17 nnposter
+--   * added ability to select fingerprints by their name
+-- 2020-07-11 nnposter
+--   * added reporting of all matched fingerprints when verbosity is increased
 ---
 
 author = {"Paulino Calderon <calderon@websec.mx>", "nnposter"}
@@ -184,13 +195,14 @@ end
 
 ---
 -- Loads data from file and returns table of fingerprints if sanity checks are
--- passed
+-- passed.
 -- @param filename Fingerprint filename
--- @param cat Category of fingerprints to use
+-- @param catlist Categories of fingerprints to use
+-- @param namelist Alternate words required in fingerprint names
 -- @return Status (true or false)
 -- @return Table of fingerprints (or an error message)
 ---
-local function load_fingerprints(filename, cat)
+local function load_fingerprints(filename, catlist, namelist)
   local file, filename_full, fingerprints
 
   -- Check if fingerprints are cached
@@ -233,11 +245,41 @@ local function load_fingerprints(filename, cat)
   end
 
   -- Category filter
-  if ( cat ) then
+  if catlist then
+    if type(catlist) ~= "table" then
+      catlist = {catlist}
+    end
     local filtered_fingerprints = {}
     for _, fingerprint in pairs(fingerprints) do
-      if(fingerprint.category == cat) then
-        table.insert(filtered_fingerprints, fingerprint)
+      for _, cat in ipairs(catlist) do
+        if fingerprint.category == cat then
+          table.insert(filtered_fingerprints, fingerprint)
+          break
+        end
+      end
+    end
+    fingerprints = filtered_fingerprints
+  end
+
+  -- Name filter
+  if namelist then
+    if type(namelist) ~= "table" then
+      namelist = {namelist}
+    end
+    local matchlist = {}
+    for _, name in ipairs(namelist) do
+      table.insert(matchlist, "%f[%w]"
+                              .. tostring(name):lower():gsub("%W", "%%%1")
+                              .. "%f[%W]")
+    end
+    local filtered_fingerprints = {}
+    for _, fingerprint in pairs(fingerprints) do
+      local fpname = fingerprint.name:lower()
+      for _, match in ipairs(matchlist) do
+        if fpname:find(match) then
+          table.insert(filtered_fingerprints, fingerprint)
+          break
+        end
       end
     end
     fingerprints = filtered_fingerprints
@@ -277,7 +319,7 @@ end
 -- @param host table as received by the scripts action method
 -- @param port table as received by the scripts action method
 -- @param fingerprint as defined in the fingerprint file
--- @param path againt which the the credentials will be tested
+-- @param path againt which the credentials will be tested
 -- @return out table suitable for inclusion in the script structured output
 --             (or nil if no credentials succeeded)
 -- @return txtout table suitable for inclusion in the script textual output
@@ -287,23 +329,28 @@ local function  test_credentials (host, port, fingerprint, path)
   for _, login_combo in ipairs(fingerprint.login_combos) do
     local user = login_combo.username
     local pass = login_combo.password
-    stdnse.debug(2, "Trying login combo -> %s:%s", user, pass)
+    stdnse.debug(1, "[%s] Trying login combo %s:%s", fingerprint.name,
+                 stdnse.string_or_blank(user), stdnse.string_or_blank(pass))
     if fingerprint.login_check(host, port, path, user, pass) then
-      stdnse.debug(1, "[%s] valid default credentials found.", fingerprint.name)
+      stdnse.debug(1, "[%s] Valid default credentials found", fingerprint.name)
       local cred = stdnse.output_table()
       cred.username = user
       cred.password = pass
       table.insert(credlst, cred)
     end
   end
-  if #credlst == 0 then return nil end
-  -- Some credentials found. Generate the fingerprint output report
+  if #credlst == 0 and nmap.verbosity() < 2 then return nil end
+  -- Some credentials found or increased verbosity. Generate the output report
   local out = stdnse.output_table()
   out.cpe = fingerprint.cpe
   out.path = path
   out.credentials = credlst
   local txtout = {}
   txtout.name = ("[%s] at %s"):format(fingerprint.name, path)
+  if #credlst == 0 then
+    table.insert(txtout, "(no valid default credentials found)")
+    return out, txtout
+  end
   for _, cred in ipairs(credlst) do
     table.insert(txtout,("%s:%s"):format(stdnse.string_or_blank(cred.username),
                                          stdnse.string_or_blank(cred.password)))
@@ -319,7 +366,8 @@ end
 
 action = function(host, port)
   local fingerprint_filename = stdnse.get_script_args("http-default-accounts.fingerprintfile") or "http-default-accounts-fingerprints.lua"
-  local category = stdnse.get_script_args("http-default-accounts.category") or false
+  local catlist = stdnse.get_script_args("http-default-accounts.category")
+  local namelist = stdnse.get_script_args("http-default-accounts.name")
   local basepath = stdnse.get_script_args("http-default-accounts.basepath") or "/"
   local output = stdnse.output_table()
   local text_output = {}
@@ -336,7 +384,7 @@ action = function(host, port)
     end
 
   --Load fingerprint data or abort
-  local status, fingerprints = load_fingerprints(fingerprint_filename, category)
+  local status, fingerprints = load_fingerprints(fingerprint_filename, catlist, namelist)
   if(not(status)) then
     return stdnse.format_output(false, fingerprints)
   end
@@ -375,12 +423,13 @@ action = function(host, port)
   for _, fingerprint in ipairs(fingerprints) do
     local target_check = fingerprint.target_check or default_target_check
     local credentials_found = false
-    stdnse.debug(1, "Processing %s", fingerprint.name)
+    stdnse.debug(1, "[%s] Examining target", fingerprint.name)
     for _, probe in ipairs(fingerprint.paths) do
       local result = results[pathmap[probe.path]]
       if result and not credentials_found then
         local path = basepath .. probe.path
         if target_check(host, port, path, result) then
+          stdnse.debug(1, "[%s] Target matched", fingerprint.name)
           local out, txtout = test_credentials(host, port, fingerprint, path)
           if out then
             output[fingerprint.name] = out

@@ -21,8 +21,12 @@
 -- * <code>header</code> - An associative array representing the header. Keys are all lowercase, and standard headers, such as 'date', 'content-length', etc. will typically be present.
 -- * <code>rawheader</code> - A numbered array of the headers, exactly as the server sent them. While header['content-type'] might be 'text/html', rawheader[3] might be 'Content-type: text/html'.
 -- * <code>cookies</code> - A numbered array of the cookies the server sent. Each cookie is a table with the expected keys, such as <code>name</code>, <code>value</code>, <code>path</code>, <code>domain</code>, and <code>expires</code>. This table can be sent to the server in subsequent responses in the <code>options</code> table to any function (see below).
--- * <code>body</code> - The full body, as returned by the server. Chunked encoding is handled transparently.
--- * <code>fragment</code> - Partially received body (if any), in case of an error.
+-- * <code>rawbody</code> - The full body, as returned by the server. Chunked transfer encoding is handled transparently.
+-- * <code>body</code> - The full body, after processing the Content-Encoding header, if any. The Content-Encoding and Content-Length headers are adjusted to stay consistent with the processed body.
+-- * <code>incomplete</code> - Partially received response object, in case of an error.
+-- * <code>truncated</code> - A flag to indicate that the body has been truncated
+-- * <code>decoded</code> - A list of processed named content encodings (like "identity" or "gzip")
+-- * <code>undecoded</code> - A list of named content encodings that could not be processed (due to lack of support or the body being corrupted for a given encoding). A body has been successfully decoded if this list is empty (or nil, if no encodings were used in the first place).
 -- * <code>location</code> - A numbered array of the locations of redirects that were followed.
 --
 -- Many of the functions optionally allow an "options" input table, which can
@@ -39,6 +43,8 @@
 -- * <code>bypass_cache</code>: Do not perform a lookup in the local HTTP cache.
 -- * <code>no_cache</code>: Do not save the result of this request to the local HTTP cache.
 -- * <code>no_cache_body</code>: Do not save the body of the response to the local HTTP cache.
+-- * <code>max_body_size</code>: Limit the received body to specific number of bytes. Overrides script argument <code>http.max-body-size</code>. See the script argument for details.
+-- * <code>truncated_ok</code>: Do not treat oversized body as error. Overrides script argument <code>http.truncated-ok</code>.
 -- * <code>any_af</code>: Allow connecting to any address family, inet or inet6. By default, these functions will only use the same AF as nmap.address_family to resolve names. (This option is a straight pass-thru to <code>comm.lua</code> functions.)
 -- * <code>redirect_ok</code>: Closure that overrides the default redirect_ok used to validate whether to follow HTTP redirects or not. False, if no HTTP redirects should be followed. Alternatively, a number may be passed to change the number of redirects to follow.
 --   The following example shows how to write a custom closure that follows 5 consecutive redirects, without the safety checks in the default redirect_ok:
@@ -98,13 +104,26 @@
 -- @args http.pipeline If set, it represents the number of HTTP requests that'll be
 -- sent on one connection. This can be set low to make debugging easier, or it
 -- can be set high to test how a server reacts (its chosen max is ignored).
--- @args http.max-pipeline If set, it represents the number of outstanding  HTTP requests
--- that should be pipelined. Defaults to <code>http.pipeline</code> (if set), or to what
--- <code>getPipelineMax</code> function returns.
+-- @args http.max-pipeline If set, it represents the number of outstanding
+-- HTTP requests that should be sent together in a single burst. Defaults to
+-- <code>http.pipeline</code> (if set), or to what function
+-- <code>get_pipeline_limit</code> returns.
 --
 -- @args http.host The value to use in the Host header of all requests unless
 -- otherwise set. By default, the Host header uses the output of
 -- <code>stdnse.get_hostname()</code>.
+--
+-- @args http.max-body-size Limit the received body to specific number of bytes.
+-- An oversized body results in an error unless script argument
+-- <code>http.truncated-ok</code> or request option
+-- <code>truncated_ok</code> is set to true. The default is 2097152 (2MB). Use
+-- value -1 to disable the limit altogether. This argument can be overridden
+-- case-by-case with request option <code>max_body_size</code>.
+--
+-- @args http.truncated-ok Do not treat oversized body as error. (Use response
+-- object flag <code>truncated</code> to check if the returned body has been
+-- truncated.) This argument can be overridden case-by-case with request option
+-- <code>truncated_ok</code>.
 
 -- TODO
 -- Implement cache system for http pipelines
@@ -114,6 +133,7 @@
 local base64 = require "base64"
 local comm = require "comm"
 local coroutine = require "coroutine"
+local math = require "math"
 local nmap = require "nmap"
 local os = require "os"
 local sasl = require "sasl"
@@ -125,6 +145,7 @@ local stringaux = require "stringaux"
 local table = require "table"
 local tableaux = require "tableaux"
 local url = require "url"
+local ascii_hostname = url.ascii_hostname
 local smbauth = require "smbauth"
 local unicode = require "unicode"
 
@@ -133,9 +154,15 @@ _ENV = stdnse.module("http", stdnse.seeall)
 --Use ssl if we have it
 local have_ssl, openssl = pcall(require,'openssl')
 
+--Use zlib if we have it
+local have_zlib, zlib = pcall(require,'zlib')
+
 USER_AGENT = stdnse.get_script_args('http.useragent') or "Mozilla/5.0 (compatible; Nmap Scripting Engine; https://nmap.org/book/nse.html)"
 local host_header = stdnse.get_script_args('http.host')
 local MAX_REDIRECT_COUNT = 5
+local MAX_BODY_SIZE = tonumber(stdnse.get_script_args('http.max-body-size')) or 2*1024*1024
+local TRUNCATED_OK = string.lower(stdnse.get_script_args('http.truncated-ok') or "false") ~= "false"
+local ERR_OVERSIZED_BODY = "response body too large"
 
 --- Recursively copy into a table any elements from another table whose key it
 -- doesn't have.
@@ -161,6 +188,13 @@ local function get_host_field(host, port, scheme)
   if host_header then return host_header end
   -- If there's no host, we can't invent a name.
   if not host then return nil end
+  local hostname = ascii_hostname(host)
+  -- If there's no port, just return hostname.
+  if not port then return hostname end
+  if type(port) == "string" then
+    port = tonumber(port)
+    assert(port, "Invalid port: not a number or table")
+  end
   if type(port) == "number" then
     port = {number=port, protocol="tcp"}
   end
@@ -168,7 +202,7 @@ local function get_host_field(host, port, scheme)
   if scheme then
     -- Caller provided scheme. If it's default, return just the hostname.
     if number == get_default_port(scheme) then
-      return stdnse.get_hostname(host)
+      return hostname
     end
   else
     scheme = url.get_default_scheme(port)
@@ -178,12 +212,12 @@ local function get_host_field(host, port, scheme)
       if (ssl_port and scheme == 'https') or
         (not ssl_port and scheme == 'http') then
         -- If it's SSL and https, or if it's plaintext and http, return just the hostname.
-        return stdnse.get_hostname(host)
+        return hostname
       end
     end
   end
   -- No special cases matched, so include the port number in the host header
-  return stdnse.get_hostname(host) .. ":" .. number
+  return hostname .. ":" .. number
 end
 
 -- Skip *( SP | HT ) starting at offset. See RFC 2616, section 2.2.
@@ -270,6 +304,7 @@ local function skip_lws(s, pos)
 end
 
 
+local digestauth_required = {"username","realm","nonce","digest-uri","response"}
 ---Validate an 'options' table, which is passed to a number of the HTTP functions. It is
 -- often difficult to track down a mistake in the options table, and requires fiddling
 -- with the http.lua source, but this should make that a lot easier.
@@ -347,8 +382,7 @@ local function validate_options(options)
       end
     elseif (key == 'digestauth') then
       if(type(value) == 'table') then
-        local req_keys = {"username","realm","nonce","digest-uri","response"}
-        for _,k in ipairs(req_keys) do
+        for _,k in ipairs(digestauth_required) do
           if not value[k] then
             stdnse.debug1("http: options.digestauth missing key: %s",k)
             bad = true
@@ -361,7 +395,8 @@ local function validate_options(options)
       end
     elseif (key == 'ntlmauth') then
       stdnse.debug1("Proceeding with ntlm message")
-    elseif(key == 'bypass_cache' or key == 'no_cache' or key == 'no_cache_body' or key == 'any_af') then
+    elseif(key == 'bypass_cache' or key == 'no_cache' or key == 'no_cache_body'
+           or key == 'any_af' or key == "truncated_ok") then
       if(type(value) ~= 'boolean') then
         stdnse.debug1("http: options.%s must be a boolean value", key)
         bad = true
@@ -374,6 +409,11 @@ local function validate_options(options)
     elseif(key == 'scheme') then
       if type(value) ~= 'string' then
         stdnse.debug1("http: options.scheme must be a string")
+        bad = true
+      end
+    elseif(key == 'max_body_size') then
+      if type(value) ~= 'number' then
+        stdnse.debug1("http: options.max_body_size must be a number")
         bad = true
       end
     else
@@ -464,84 +504,73 @@ local function recv_header(s, partial)
 end
 
 -- Receive until the connection is closed.
-local function recv_all(s, partial)
-  local parts
-
-  partial = partial or ""
-
-  parts = {partial}
-  while true do
-    local status, part = s:receive()
-    if not status then
-      break
-    else
-      parts[#parts + 1] = part
+local function recv_all(s, partial, maxlen)
+  local parts = {}
+  local part = partial or ""
+  repeat
+    if maxlen then
+      maxlen = maxlen - #part
+      if maxlen < 0 then
+        table.insert(parts, part:sub(1, maxlen - 1))
+        return nil, ERR_OVERSIZED_BODY, table.concat(parts)
+      end
     end
-  end
-
+    table.insert(parts, part)
+    local status
+    status, part = s:receive()
+  until not status
   return table.concat(parts), ""
 end
 
 -- Receive exactly <code>length</code> bytes. Returns <code>nil</code> if that
 -- many aren't available.
-local function recv_length(s, length, partial)
-  local parts, last
-
-  partial = partial or ""
-
-  parts = {}
-  last = partial
-  length = length - #last
-  while length > 0 do
-    local status
-
-    parts[#parts + 1] = last
-    status, last = s:receive()
-    if not status then
-      return nil, last, table.concat(parts)
+local function recv_length(s, recvlen, partial, maxlen)
+  local parts = {}
+  local part = partial or ""
+  partial = ""
+  repeat
+    if #part > recvlen then
+      partial = part:sub(recvlen + 1)
+      part = part:sub(1, recvlen)
     end
-    length = length - #last
-  end
-
-  -- At this point length is 0 or negative, and indicates the degree to which
-  -- the last read "overshot" the desired length.
-
-  if length == 0 then
-    return table.concat(parts) .. last, ""
-  else
-    return table.concat(parts) .. string.sub(last, 1, length - 1), string.sub(last, length)
-  end
+    if maxlen then
+      maxlen = maxlen - #part
+      if maxlen < 0 then
+        table.insert(parts, part:sub(1, maxlen - 1))
+        return nil, ERR_OVERSIZED_BODY, table.concat(parts)
+      end
+    end
+    table.insert(parts, part)
+    recvlen = recvlen - #part
+    if recvlen == 0 then
+      return table.concat(parts), partial
+    end
+    local status
+    status, part = s:receive()
+  until not status
+  return nil, part, table.concat(parts)
 end
 
 -- Receive until the end of a chunked message body, and return the dechunked
 -- body.
-local function recv_chunked(s, partial)
-  local chunks, chunk, fragment
-  local chunk_size
-  local pos
-
-  chunks = {}
+local function recv_chunked(s, partial, maxlen)
+  local chunks = {}
   repeat
-    local line, hex, _, i
-
+    local line
     line, partial = recv_line(s, partial)
     if not line then
       return nil, "Chunk size not received; " .. partial, table.concat(chunks)
     end
 
-    pos = 1
-    pos = skip_space(line, pos)
-
-    -- Get the chunk-size.
-    _, i, hex = string.find(line, "^([%x]+)", pos)
-    if not i then
+    -- Get the chunk size.
+    local pos = skip_space(line)
+    local chunklen = line:match("^%x+", pos)
+    if not chunklen then
       return nil,
             ("Chunked encoding didn't find hex; got %q."):format(line:sub(pos, pos + 10)),
             table.concat(chunks)
     end
-    pos = i + 1
-
-    chunk_size = tonumber(hex, 16)
+    chunklen = tonumber(chunklen, 16)
 
     -- Ignore chunk-extensions that may follow here.
     -- RFC 2616, section 2.1 ("Implied *LWS") seems to allow *LWS between the
@@ -552,13 +581,19 @@ local function recv_chunked(s, partial)
     -- starting with "...". We don't allow *LWS here, only ( SP | HT ), so the
     -- first interpretation will prevail.
 
-    chunk, partial, fragment = recv_length(s, chunk_size, partial)
+    local chunk, fragment
+    chunk, partial, fragment = recv_length(s, chunklen, partial, maxlen)
     if not chunk then
-      return nil,
-             "Incomplete chunk; " .. partial,
-             table.concat(chunks) .. fragment
+      if partial ~= ERR_OVERSIZED_BODY then
+        partial = "Incomplete chunk; " .. partial
+      end
+      table.insert(chunks, fragment)
+      return nil, partial, table.concat(chunks)
     end
-    chunks[#chunks + 1] = chunk
+    table.insert(chunks, chunk)
+    if maxlen then
+      maxlen = maxlen - chunklen
+    end
 
     line, partial = recv_line(s, partial)
     if not line then
@@ -570,7 +605,7 @@ local function recv_chunked(s, partial)
              ("Didn't find CRLF after chunk-data; got %q."):format(line),
              table.concat(chunks)
     end
-  until chunk_size == 0
+  until chunklen == 0
 
   return table.concat(chunks), partial
 end
@@ -578,11 +613,8 @@ end
 -- Receive a message body, assuming that the header has already been read by
 -- <code>recv_header</code>. The handling is sensitive to the request method
 -- and the status code of the response.
-local function recv_body(s, response, method, partial)
+local function recv_body(s, response, method, partial, maxlen)
   local connection_close, connection_keepalive
-  local transfer_encoding
-  local content_length
-  local err
 
   partial = partial or ""
 
@@ -620,7 +652,7 @@ local function recv_body(s, response, method, partial)
     or (response.status >= 100 and response.status <= 199)
     or response.status == 204 or response.status == 304 then
     if connection_close or (response.version == "1.0" and not connection_keepalive) then
-      return recv_all(s, partial)
+      return recv_all(s, partial, maxlen)
     else
       return "", partial
     end
@@ -632,13 +664,13 @@ local function recv_body(s, response, method, partial)
   --    is terminated by closing the connection.
   if response.header["transfer-encoding"]
     and response.header["transfer-encoding"] ~= "identity" then
-    return recv_chunked(s, partial)
+    return recv_chunked(s, partial, maxlen)
   end
   -- The Citrix XML Service sends a wrong "Transfer-Coding" instead of
   -- "Transfer-Encoding".
   if response.header["transfer-coding"]
     and response.header["transfer-coding"] ~= "identity" then
-    return recv_chunked(s, partial)
+    return recv_chunked(s, partial, maxlen)
   end
 
   -- 3. If a Content-Length header field (section 14.13) is present, its decimal
@@ -649,11 +681,11 @@ local function recv_body(s, response, method, partial)
   --    Transfer-Encoding header field and a Content-Length header field, the
   --    latter MUST be ignored.
   if response.header["content-length"]  and not response.header["transfer-encoding"] then
-    content_length = tonumber(response.header["content-length"])
+    local content_length = tonumber(response.header["content-length"])
     if not content_length then
       return nil, string.format("Content-Length %q is non-numeric", response.header["content-length"])
     end
-    return recv_length(s, content_length, partial)
+    return recv_length(s, content_length, partial, maxlen)
   end
 
   -- 4. If the message uses the media type "multipart/byteranges", and the
@@ -663,7 +695,7 @@ local function recv_body(s, response, method, partial)
   -- Case 4 is unhandled.
 
   -- 5. By the server closing the connection.
-  return recv_all(s, partial)
+  return recv_all(s, partial, maxlen)
 end
 
 -- Sets response["status-line"], response.status, and response.version.
@@ -800,17 +832,65 @@ parse_set_cookie = function (s)
   return cookie
 end
 
+--- Attempt to repeatedly decode HTTP response body according to a given list
+-- of named encodings.
+--
+-- @param body A string representing the raw, undecoded response body.
+-- @param encodings A list of encodings (string or table)
+-- @param maxlen A size limit for the decoded body
+-- @return A decoded body
+-- @return A list of encodings that were successfully applied
+-- @return A list of encodings that remain to be applied to decode the body
+--         completely.
+-- @return Error string (if any)
+-- @return Partially decoded body. For corrupted encoding, this is the body
+--         still undecoded. For oversized body, this is a portion of the decoded
+--         body, up to the size limit.
+local decode_body = function (body, encodings, maxlen)
+  if not encodings then return body end
+
+  if type(encodings) == "string" then
+    encodings = stringaux.strsplit("%W+", encodings)
+  end
+  assert(type(encodings) == "table", "Invalid encoding specification")
+
+  local decoded = {}
+  local undecoded = tableaux.tcopy(encodings)
+  while #undecoded > 0 do
+    local enc = undecoded[1]:lower()
+    if enc == "identity" then
+      -- do nothing
+      table.insert(decoded, table.remove(undecoded, 1))
+    elseif enc == "gzip" and have_zlib then
+      local stream = zlib.inflate(body)
+      local status, newbody = pcall(stream.read, stream,
+                                   maxlen and (maxlen + 1) or "*a")
+      stream:close()
+      if not status then
+        return nil, decoded, undecoded,
+               ("Corrupted Content-Encoding: " .. enc), body
+      end
+      table.insert(decoded, table.remove(undecoded, 1))
+      newbody = newbody or ""
+      if maxlen and #newbody > maxlen then
+        return nil, decoded, undecoded, ERR_OVERSIZED_BODY, newbody:sub(1, maxlen)
+      end
+      body = newbody
+    else
+      stdnse.debug1("Unsupported Content-Encoding: %s", enc)
+      break
+    end
+  end
+
+  return body, decoded, undecoded
+end
+
 -- Read one response from the socket <code>s</code> and return it after
 -- parsing.
 --
--- In case of an error, a partially received response body (if any) is captured
--- and preserved in the response object. A future possible enhancement is to
--- extend this feature to also cover the response status line and headers.
--- One way to implement it would be to repurpose the current third returned
--- value from next_response() to be the partially built-up HTTP response
--- object, not just a string representing the body fragment.
-
-local function next_response(s, method, partial)
+-- In case of an error, an error message and a partially received response
+-- (if any) are returned as additional values.
+local function next_response(s, method, partial, options)
   local response
   local status_line, header, body, fragment
   local status, err
@@ -822,32 +902,74 @@ local function next_response(s, method, partial)
     header={},
     rawheader={},
     cookies={},
-    body=""
+    rawbody="",
+    body="",
+    truncated = nil
   }
 
   status_line, partial = recv_line(s, partial)
   if not status_line then
-    return nil, partial
+    return nil, partial, response
   end
+
   status, err = parse_status_line(status_line, response)
   if not status then
-    return nil, err
+    return nil, err, response
   end
 
   header, partial = recv_header(s, partial)
   if not header then
-    return nil, partial
+    return nil, partial, response
   end
   status, err = parse_header(header, response)
   if not status then
-    return nil, err
+    return nil, err, response
   end
 
-  body, partial, fragment = recv_body(s, response, method, partial)
-  if not body then
-    return nil, partial, fragment
+  options = options or {}
+  local maxlen = math.floor(options.max_body_size or MAX_BODY_SIZE)
+  if maxlen < 0 then
+    maxlen = nil
   end
-  response.body = body
+  local truncated_ok = options.truncated_ok
+  if truncated_ok == nil then
+    truncated_ok = TRUNCATED_OK
+  end
+
+  body, partial, fragment = recv_body(s, response, method, partial, maxlen)
+  response.rawbody = body or fragment
+  response.body = response.rawbody
+  if not body then
+    if partial ~= ERR_OVERSIZED_BODY then
+      return nil, partial, response
+    end
+    response.truncated = true
+    if not truncated_ok then
+      return nil, ("Received " .. ERR_OVERSIZED_BODY), response
+    end
+  end
+
+  if response.header["content-encoding"] then
+    local dcd, undcd
+    body, dcd, undcd, err, fragment = decode_body(body, response.header["content-encoding"], maxlen)
+    response.body = body or fragment
+    response.decoded = dcd
+    response.undecoded = undcd
+    if not body then
+      if err ~= ERR_OVERSIZED_BODY then
+        return nil, err, response
+      end
+      response.truncated = true
+      if not truncated_ok then
+        return nil, ("Decoded " .. ERR_OVERSIZED_BODY), response
+      end
+    else
+      if response.header["content-length"] then
+        response.header["content-length"] = tostring(#body)
+      end
+    end
+    response.header["content-encoding"] = #undcd > 0 and table.concat(undcd, ", ") or nil
+  end
 
   return response, partial
 end
@@ -861,20 +983,20 @@ end
 --
 --  @param response The HTTP response table
 --  @return The max number of requests on a keep-alive connection
-local function getPipelineMax(response)
+local function get_pipeline_limit(response)
   -- Allow users to override this with a script-arg
-  local pipeline = stdnse.get_script_args({'http.pipeline', 'pipeline'})
+  local pipeline = tonumber(stdnse.get_script_args({'http.pipeline', 'pipeline'}))
 
-  if(pipeline) then
-    return tonumber(pipeline)
+  if pipeline then
+    return pipeline
   end
 
   if response then
     local hdr = response.header or {}
-    local opts = stringaux.strsplit("%s+", (hdr.connection or ""):lower())
+    local opts = stringaux.strsplit("[,%s]+", (hdr.connection or ""):lower())
     if tableaux.contains(opts, "close") then return 1 end
     if response.version >= "1.1" or tableaux.contains(opts, "keep-alive") then
-      return tonumber((hdr["keep-alive"] or ""):match("max=(%d+)")) or 40
+      return 1 + (tonumber((hdr["keep-alive"] or ""):match("max=(%d+)")) or 39)
     end
   end
   return 1
@@ -910,21 +1032,23 @@ end
 --   size: The size of the record, equal to #record.result.body.
 local cache = {size = 0};
 
+local function cmp_last_used (r1, r2)
+      return (r1.last_used or 0) < (r2.last_used or 0);
+end
+
+local arg_max_cache_size = tonumber(stdnse.get_script_args({'http.max-cache-size', 'http-max-cache-size'}) or 1e6);
 local function check_size (cache)
-  local max_size = tonumber(stdnse.get_script_args({'http.max-cache-size', 'http-max-cache-size'}) or 1e6);
 
   local size = cache.size;
 
-  if size > max_size then
+  if size > arg_max_cache_size then
     stdnse.debug1(
         "Current http cache size (%d bytes) exceeds max size of %d",
-        size, max_size);
-    table.sort(cache, function(r1, r2)
-      return (r1.last_used or 0) < (r2.last_used or 0);
-    end);
+        size, arg_max_cache_size);
+    table.sort(cache, cmp_last_used);
 
     for i, record in ipairs(cache) do
-      if size <= max_size then break end
+      if size <= arg_max_cache_size then break end
       local result = record.result;
       if type(result.body) == "string" then
         size = size - record.size;
@@ -934,7 +1058,7 @@ local function check_size (cache)
     cache.size = size;
   end
   stdnse.debug2("Final http cache size (%d bytes) of max size of %d",
-      size, max_size);
+      size, arg_max_cache_size);
   return size;
 end
 
@@ -954,7 +1078,7 @@ local function lookup_cache (method, host, port, path, options)
 
   if type(port) == "table" then port = port.number end
 
-  local key = stdnse.get_hostname(host)..":"..port..":"..path;
+  local key = ascii_hostname(host)..":"..port..":"..path;
   local mutex = nmap.mutex(tostring(lookup_cache)..key);
 
   local state = {
@@ -1015,6 +1139,12 @@ local function response_is_cacheable(response)
     return false
   end
 
+  -- It is not desirable to cache a truncated response because it could poison
+  -- subsequent requests with different options max-body-size or truncated_ok.
+  if response.truncated then
+    return false
+  end
+
   return true
 end
 
@@ -1060,16 +1190,19 @@ end
 -- being the key. The table also has an entry named "status" which contains the
 -- http status code of the request.
 -- In case of an error, the status is nil, status-line describes the problem,
--- and fragment contains a partially received response body (if any).
+-- and member "incomplete" contains a partially received response (if any).
 
-local function http_error(status_line, fragment)
+local function http_error(status_line, response)
+  stdnse.debug2("HTTP response error: %s", status_line)
   return {
     status = nil,
     ["status-line"] = status_line,
     header = {},
     rawheader = {},
     body = nil,
-    fragment = fragment
+    rawbody = nil,
+    truncated = nil,
+    incomplete = response
   }
 end
 
@@ -1146,7 +1279,6 @@ local function build_request(host, port, method, path, options)
   -- Build a form submission from a table, like "k1=v1&k2=v2".
   if type(options.content) == "table" then
     local parts = {}
-    local k, v
     for k, v in pairs(options.content) do
       parts[#parts + 1] = url.escape(k) .. "=" .. url.escape(v)
     end
@@ -1209,7 +1341,6 @@ local function request(host, port, data, options)
     return http_error("Options failed to validate.")
   end
   local method
-  local header
   local response
 
   options = options or {}
@@ -1231,10 +1362,10 @@ local function request(host, port, data, options)
   end
 
   repeat
-    local fragment
-    response, partial, fragment = next_response(socket, method, partial)
+    local incomplete
+    response, partial, incomplete = next_response(socket, method, partial, options)
     if not response then
-      return http_error("Error in next_response function; " .. partial, fragment)
+      return http_error("Error in next_response function; " .. partial, incomplete)
     end
     -- See RFC 2616, sections 8.2.3 and 10.1.1, for the 100 Continue status.
     -- Sometimes a server will tell us to "go ahead" with a POST body before
@@ -1283,7 +1414,7 @@ function generic_request(host, port, method, path, options)
     options_with_auth_removed["auth"] = nil
     local r = generic_request(host, port, method, path, options_with_auth_removed)
     local h = r.header['www-authenticate']
-    if not r.status or (h and not string.find(h:lower(), "digest.-realm")) then
+    if not (r.status and h and h:lower():find("digest.-realm")) then
       stdnse.debug1("http: the target doesn't support digest auth or there was an error during request.")
       return http_error("The target doesn't support digest auth or there was an error during request.")
     end
@@ -1305,6 +1436,8 @@ function generic_request(host, port, method, path, options)
     local authentication_header = response.header['www-authenticate']
     -- get back the timeout option.
     custom_options.timeout = options.timeout
+    -- cannot deal with truncated responses here
+    custom_options.truncated_ok = false
     custom_options.header = options.header or {}
     custom_options.header["Connection"] = "Keep-Alive" -- Keep-Alive headers are needed for authentication.
 
@@ -1347,10 +1480,10 @@ function generic_request(host, port, method, path, options)
     end
 
     repeat
-      local fragment
-      response, partial, fragment = next_response(socket, method, partial)
+      local incomplete
+      response, partial, incomplete = next_response(socket, method, partial, custom_options)
       if not response then
-        return http_error("There was error in receiving response of type 1 message; " .. partial, fragment)
+        return http_error("There was error in receiving response of type 1 message; " .. partial, incomplete)
       end
     until not (response.status >= 100 and response.status <= 199)
 
@@ -1424,10 +1557,10 @@ function generic_request(host, port, method, path, options)
     socket:send(build_request(host, port, method, path, custom_options))
 
     repeat
-      local fragment
-      response, partial, fragment = next_response(socket, method, partial)
+      local incomplete
+      response, partial, incomplete = next_response(socket, method, partial, options)
       if not response then
-        return http_error("There was error in receiving response of type 3 message; " .. partial, fragment)
+        return http_error("There was error in receiving response of type 3 message; " .. partial, incomplete)
       end
     until not (response.status >= 100 and response.status <= 199)
 
@@ -1464,6 +1597,9 @@ function put(host, port, path, options, putdata)
   return generic_request(host, port, "PUT", path, mod_options)
 end
 
+local function domain (h)
+  return (h:match("%..+%..+") or h):lower()
+end
 -- A battery of tests a URL is subjected to in order to decide if it may be
 -- redirected to.
 local redirect_ok_rules = {
@@ -1481,11 +1617,10 @@ local redirect_ok_rules = {
   -- * ccTLDs are not treated as such. The rule will not stop a redirect
   --   from foo.co.uk to bar.co.uk even though it logically should.
   function (url, host, port)
-    local hostname = stdnse.get_hostname(host)
+    local hostname = ascii_hostname(host)
     if hostname == host.ip then
       return url.host == hostname
     end
-    local domain = function (h) return (h:match("%..+%..+") or h):lower() end
     return domain(hostname) == domain(url.host)
   end,
 
@@ -1567,7 +1702,7 @@ function parse_redirect(host, port, path, response)
   local u = url.parse(response.header.location)
   if ( not(u.host) ) then
     -- we're dealing with a relative url
-    u.host = stdnse.get_hostname(host)
+    u.host = ascii_hostname(host)
   end
   -- do port fixup
   u.port = u.port or get_default_port(u.scheme) or port.number
@@ -1575,12 +1710,15 @@ function parse_redirect(host, port, path, response)
     u.path = "/"
   end
   u.path = url.absolute(path, u.path)
-  if ( u.query ) then
-    u.path = ("%s?%s"):format( u.path, u.query )
-  end
+  u.path = url.build({
+      path = u.path,
+      query = u.query,
+      params = u.params,
+    })
   return u
 end
 
+local ret_false = function () return false end
 -- Retrieves the correct function to use to validate HTTP redirects
 -- @param host table as received by the action function
 -- @param port table as received by the action function
@@ -1589,7 +1727,7 @@ end
 local function get_redirect_ok(host, port, options)
   if ( options ) then
     if ( options.redirect_ok == false ) then
-      return function() return false end
+      return ret_false
     elseif( "function" == type(options.redirect_ok) ) then
       return options.redirect_ok(host, port)
     elseif( type(options.redirect_ok) == "number") then
@@ -1664,6 +1802,7 @@ function get_url( u, options )
   if(not(validate_options(options))) then
     return http_error("Options failed to validate.")
   end
+  options = options or {}
   local parsed = url.parse( u )
   local port = {}
 
@@ -1676,7 +1815,7 @@ function get_url( u, options )
     path = path .. "?" .. parsed.query
   end
 
-  return get( parsed.host, port, path, options )
+  return get( parsed.ascii_host or parsed.host, port, path, options )
 end
 
 ---Fetches a resource with a HEAD request.
@@ -1777,7 +1916,6 @@ function pipeline(host, port, allReqs)
   return pipeline_go(host, port, allReqs)
 end
 
-
 ---Adds a pending request to the HTTP pipeline.
 --
 -- The HTTP pipeline is a set of requests that will all be sent at the same
@@ -1805,25 +1943,36 @@ end
 -- @return Table with the pipeline requests (plus this new one)
 -- @see http.pipeline_go
 function pipeline_add(path, options, all_requests, method)
-  if(not(validate_options(options))) then
+  if not validate_options(options) then
     return nil
   end
+  options = tableaux.tcopy(options or {})
   method = method or 'GET'
   all_requests = all_requests or {}
-
-  local mod_options = {
-    header = {
-      ["Connection"] = "keep-alive"
-    }
-  }
-  table_augment(mod_options, options or {})
-
-  local object = { method=method, path=path, options=mod_options }
-  table.insert(all_requests, object)
-
+  table.insert(all_requests, {method=method, path=path, options=options})
   return all_requests
 end
 
+---Makes sure that a given header is set to a given value. Any existing values
+-- of this header are removed.
+--
+-- @param headers A table of existing headers or nil.
+-- @param header to set
+-- @param value to set the header to
+-- @return An in-place modified table of headers
+local function force_header (headers, header, value)
+  local headers = headers or {}
+  local header_lc = header:lower()
+  for h in pairs(headers) do
+    if h:lower() == header_lc then
+      headers[h] = nil
+    end
+  end
+  headers[header] = value
+  return headers
+end
+
+local pipeline_comm_opts = {recv_before=false, request_timeout=10000}
 ---Performs all queued requests in the all_requests variable (created by the
 -- <code>pipeline_add</code> function).
 --
@@ -1836,130 +1985,99 @@ end
 -- @return A list of responses, in the same order as the requests were queued.
 --         Each response is a table as described in the module documentation.
 --         The response list may be either nil or shorter than expected (up to
---         and including being completely empty) due to communication issues.
+--         and including being completely empty) due to communication issues or
+--         other errors.
 function pipeline_go(host, port, all_requests)
-  local responses
-  local response
-  local partial
+  local responses = {}
 
-  responses = {}
-
-  -- Check for an empty request
+  -- Check for an empty set
   if (not all_requests or #all_requests == 0) then
     stdnse.debug1("Warning: empty set of requests passed to http.pipeline_go()")
     return responses
   end
-  stdnse.debug1("Total number of pipelined requests: " .. #all_requests)
-
-  local socket, bopt
+  stdnse.debug1("HTTP pipeline: Total number of requests: %d", #all_requests)
 
   -- We'll try a first request with keep-alive, just to check if the server
-  -- supports and how many requests we can send into one socket!
-  local request = build_request(host, port, all_requests[1].method, all_requests[1].path, all_requests[1].options)
-
-  socket, partial, bopt = comm.tryssl(host, port, request, {recv_before=false})
+  -- supports it and how many requests we can send into one socket
+  local req = all_requests[1]
+  req.options.header = force_header(req.options.header, "Connection", "keep-alive")
+  local reqstr = build_request(host, port, req.method, req.path, req.options)
+  local socket, partial, bopt = comm.tryssl(host, port, reqstr, tableaux.tcopy(pipeline_comm_opts))
   if not socket then
     return nil
   end
-
-  response, partial = next_response(socket, all_requests[1].method, partial)
-  if not response then
-    return nil
+  local resp
+  resp, partial = next_response(socket, req.method, partial, req.options)
+  if not resp then
+    return responses
   end
+  table.insert(responses, resp)
+  local connsent = 1
 
-  table.insert(responses, response)
-
-  local limit = getPipelineMax(response) -- how many requests to send on one connection
-  limit = limit > #all_requests and #all_requests or limit
-  local max_pipeline = stdnse.get_script_args("http.max-pipeline") or limit -- how many requests should be pipelined
-  local count = 1
-  stdnse.debug1("Number of requests allowed by pipeline: " .. limit)
+  -- how many requests to send on one connection
+  local connlimit = get_pipeline_limit(resp)
+  -- how many requests should be sent in a single batch
+  local batchlimit = tonumber(stdnse.get_script_args("http.max-pipeline")) or connlimit
+  stdnse.debug3("HTTP pipeline: connlimit=%d, batchlimit=%d", connlimit, batchlimit)
 
   while #responses < #all_requests do
-    local j, batch_end
-    -- we build a table with many requests, upper limited by the var "limit"
-    local requests = {}
-
-    if #responses + limit < #all_requests then
-      batch_end = #responses + limit
-    else
-      batch_end = #all_requests
-    end
-
-    j = #responses + 1
-    while j <= batch_end do
-      if j == batch_end then
-        all_requests[j].options.header["Connection"] = "close"
-      end
-      if j~= batch_end and all_requests[j].options.header["Connection"] ~= 'keep-alive' then
-        all_requests[j].options.header["Connection"] = 'keep-alive'
-      end
-      table.insert(requests, build_request(host, port, all_requests[j].method, all_requests[j].path, all_requests[j].options))
-      -- to avoid calling build_request more than one time on the same request,
-      -- we might want to build all the requests once, above the main while loop
-      j = j + 1
-    end
-
-    if count >= limit or not socket:get_info() then
+    -- reconnect if necessary
+    if connsent >= connlimit or resp.truncated or not socket:get_info() then
+      socket:close()
+      stdnse.debug3("HTTP pipeline: reconnecting")
       socket:connect(host, port, bopt)
+      if not socket then
+        return nil
+      end
+      socket:set_timeout(pipeline_comm_opts.request_timeout)
       partial = ""
-      count = 0
+      connsent = 0
     end
-    socket:set_timeout(10000)
+    if connlimit > connsent + #all_requests - #responses then
+      connlimit = connsent + #all_requests - #responses
+    end
 
-    local start = 1
-    local len = #requests
-    local req_sent = 0
-    -- start sending the requests and pipeline them in batches of max_pipeline elements
-    while start <= len do
-      stdnse.debug2("HTTP pipeline: number of requests in current batch: %d, already sent: %d, responses from current batch: %d, all responses received: %d",len,start-1,count,#responses)
-      local req = {}
-      if max_pipeline == limit then
-        req = requests
-      else
-        for i=start,start+max_pipeline-1,1 do
-          table.insert(req, requests[i])
+    -- determine the current batch size
+    local batchsize = connlimit - connsent
+    if batchsize > batchlimit then
+      batchsize = batchlimit
+    end
+    stdnse.debug3("HTTP pipeline: batch=%d, conn=%d/%d, resp=%d/%d", batchsize, connsent, connlimit, #responses, #all_requests)
+
+    -- build and send a batch of requests
+    local requests = {}
+    for i = 1, batchsize do
+      local req = all_requests[#responses + i]
+      local connmode = connsent + i < connlimit and "keep-alive" or "close"
+      req.options.header = force_header(req.options.header, "Connection", connmode)
+      table.insert(requests, build_request(host, port, req.method, req.path, req.options))
+    end
+    socket:send(table.concat(requests))
+
+    -- receive batch responses
+    for i = 1, batchsize do
+      local req = all_requests[#responses + 1]
+      resp, partial = next_response(socket, req.method, partial, req.options)
+      if not resp then
+        stdnse.debug3("HTTP pipeline: response[%d]: %s", #responses + 1, partial)
+        connlimit = connsent + i - 1
+        if connlimit == 0 then
+          stdnse.debug1("HTTP pipeline: First request on a new connection failed; giving up.");
+          return responses
         end
+        stdnse.debug1("HTTP pipeline: Received only %d of %d batch responses.\nDecreasing connection limit to %d.", i - 1, batchsize, connlimit)
+        break
       end
-      local num_req = #req
-      req = table.concat(req, "")
-      start = start + max_pipeline
-      socket:send(req)
-      req_sent = req_sent + num_req
-      local inner_count = 0
-      local fail = false
-      -- collect responses for the last batch
-      while inner_count < num_req and #responses < #all_requests do
-        response, partial = next_response(socket, all_requests[#responses + 1].method, partial)
-        if not response then
-          stdnse.debug1("HTTP pipeline: there was a problem while receiving responses.")
-          stdnse.debug3("The request was:\n%s",req)
-          fail = true
-          break
-        end
-        count = count + 1
-        inner_count = inner_count + 1
-        responses[#responses + 1] = response
-      end
-      if fail then break end
+      table.insert(responses, resp)
+      if resp.truncated then break end
     end
-
-    socket:close()
-
-    if count == 0 then
-      stdnse.debug1("Received 0 of %d expected responses.\nGiving up on pipeline.", limit);
-      break
-    elseif count < req_sent then
-      stdnse.debug1("Received only %d of %d expected responses.\nDecreasing max pipelined requests to %d.", count, req_sent, count)
-      limit = count
-    end
+    connsent = connsent + batchsize
   end
+  socket:close()
 
-  stdnse.debug1("Number of received responses: " .. #responses)
-
+  stdnse.debug1("HTTP pipeline: Number of received responses: %d", #responses)
   return responses
 end
-
 
 -- Parsing of specific headers. skip_space and the read_* functions return the
 -- byte index following whatever they have just read, or nil on error.
@@ -2058,7 +2176,6 @@ function grab_forms(body)
   local form_end_expr = tag_pattern("form", true)
 
   local form_opening = string.find(body, form_start_expr)
-  local forms = {}
 
   while form_opening do
     local form_closing = string.find(body, form_end_expr, form_opening+1)
@@ -2216,7 +2333,7 @@ end
 -- See RFC 2617, section 1.2. This function returns a table with keys "scheme"
 -- and "params".
 local function read_auth_challenge(s, pos)
-  local _, scheme, params
+  local scheme, params
 
   pos, scheme = read_token(s, pos)
   if not scheme then
@@ -2451,6 +2568,16 @@ local function cache_404_response(host, port, response)
   return table.unpack(response)
 end
 
+local bad_responses = { 301, 302, 400, 401, 403, 499, 501, 503 }
+local identify_404_get_opts = {redirect_ok=false}
+local identify_404_cache_404 = {true, 404}
+local identify_404_cache_unknown = {false,
+  "Two known 404 pages returned valid and different pages; unable to identify valid response."
+}
+local identify_404_cache_unknown_folder = {false,
+  "Two known 404 pages returned valid and different pages; unable to identify valid response (happened when checking a folder)."
+}
+local identify_404_cache_200 = {true, 200}
 ---Try requesting a non-existent file to determine how the server responds to
 -- unknown pages ("404 pages")
 --
@@ -2495,14 +2622,13 @@ function identify_404(host, port)
     end
   end
   local data
-  local bad_responses = { 301, 302, 400, 401, 403, 499, 501, 503 }
 
   -- The URLs used to check 404s
   local URL_404_1 = '/nmaplowercheck' .. os.time(os.date('*t'))
   local URL_404_2 = '/NmapUpperCheck' .. os.time(os.date('*t'))
   local URL_404_3 = '/Nmap/folder/check' .. os.time(os.date('*t'))
 
-  data = get(host, port, URL_404_1,{redirect_ok=false})
+  data = get(host, port, URL_404_1, identify_404_get_opts)
   if(data == nil) then
     stdnse.debug1("HTTP: Failed while testing for 404 status code")
     -- do not cache; maybe it will work next time?
@@ -2511,7 +2637,7 @@ function identify_404(host, port)
 
   if(data.status and data.status == 404) then
     stdnse.debug1("HTTP: Host returns proper 404 result.")
-    return cache_404_response(host, port, {true, 404})
+    return cache_404_response(host, port, identify_404_cache_404)
   end
 
   if(data.status and data.status == 200) then
@@ -2559,17 +2685,13 @@ function identify_404(host, port)
       if(clean_body ~= clean_body2) then
         stdnse.debug1("HTTP: Two known 404 pages returned valid and different pages; unable to identify valid response.")
         stdnse.debug1("HTTP: If you investigate the server and it's possible to clean up the pages, please post to nmap-dev mailing list.")
-        return cache_404_response(host, port, {false,
-            "Two known 404 pages returned valid and different pages; unable to identify valid response."
-          })
+        return cache_404_response(host, port, identify_404_cache_unknown)
       end
 
       if(clean_body ~= clean_body3) then
         stdnse.debug1("HTTP: Two known 404 pages returned valid and different pages; unable to identify valid response (happened when checking a folder).")
         stdnse.debug1("HTTP: If you investigate the server and it's possible to clean up the pages, please post to nmap-dev mailing list.")
-        return cache_404_response(host, port, {false,
-            "Two known 404 pages returned valid and different pages; unable to identify valid response (happened when checking a folder)."
-          })
+        return cache_404_response(host, port, identify_404_cache_unknown_folder)
       end
 
       cache_404_response(host, port, {true, 200, clean_body})
@@ -2577,7 +2699,7 @@ function identify_404(host, port)
     end
 
     stdnse.debug1("HTTP: The 200 response didn't contain a body.")
-    return cache_404_response(host, port, {true, 200})
+    return cache_404_response(host, port, identify_404_cache_200)
   end
 
   -- Loop through any expected error codes
@@ -2657,6 +2779,12 @@ function page_exists(data, result_404, known_404, page, displayall)
   end
 end
 
+local lowercase = function (p)
+  return (p or ''):lower()
+end
+local safe_string = function (p)
+  return p or ''
+end
 ---Check if the response variable contains the given text.
 --
 -- Response variable could be a return from a http.get, http.post,
@@ -2677,8 +2805,7 @@ end
 --@return result True if the string matched, false otherwise
 --@return matches An array of captures from the match, if any
 function response_contains(response, pattern, case_sensitive)
-  local result, _
-  local m = {}
+  local m
 
   -- If they're searching for the empty string or nil, it's true
   if(pattern == '' or pattern == nil) then
@@ -2686,10 +2813,7 @@ function response_contains(response, pattern, case_sensitive)
   end
 
   -- Create a function that either lowercases everything or doesn't, depending on case sensitivity
-  local case = function(pattern) return string.lower(pattern or '') end
-  if(case_sensitive == true) then
-    case = function(pattern) return (pattern or '') end
-  end
+  local case = case_sensitive and safe_string or lowercase
 
   -- Set the case of the pattern
   pattern = case(pattern)
@@ -2737,7 +2861,7 @@ end
 --@param contenttype [optional] The content-type value for the path, if it's known.
 function save_path(host, port, path, status, links_to, linked_from, contenttype)
   -- Make sure we have a proper hostname and port
-  host = stdnse.get_hostname(host)
+  host = ascii_hostname(host)
   if(type(port) == 'table') then
     port = port['number']
   end
@@ -2768,42 +2892,50 @@ function save_path(host, port, path, status, links_to, linked_from, contenttype)
     end
   end
 
+  if parsed.host then
+    host = parsed.ascii_host or parsed.host
+  end
+
+  if parsed.port then
+    port = parsed.port
+  end
+
   -- Add to the 'all_pages' key
-  stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'all_pages'}, parsed['path'])
+  stdnse.registry_add_array({host, 'www', port, 'all_pages'}, parsed['path'])
 
   -- Add the URL with querystring to all_pages_full_query
-  stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'all_pages_full_query'}, parsed['path_query'])
+  stdnse.registry_add_array({host, 'www', port, 'all_pages_full_query'}, parsed['path_query'])
 
   -- Add the URL to a key matching the response code
   if(status) then
-    stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'status_codes', status}, parsed['path'])
+    stdnse.registry_add_array({host, 'www', port, 'status_codes', status}, parsed['path'])
   end
 
   -- If it's a directory, add it to the directories list; otherwise, add it to the files list
   if(parsed['is_folder']) then
-    stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'directories'}, parsed['path'])
+    stdnse.registry_add_array({host, 'www', port, 'directories'}, parsed['path'])
   else
-    stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'files'}, parsed['path'])
+    stdnse.registry_add_array({host, 'www', port, 'files'}, parsed['path'])
   end
 
 
   -- If we have an extension, add it to the extensions key
   if(parsed['extension']) then
-    stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'extensions', parsed['extension']}, parsed['path'])
+    stdnse.registry_add_array({host, 'www', port, 'extensions', parsed['extension']}, parsed['path'])
   end
 
   -- Add an entry for the page and its arguments
   if(parsed['querystring']) then
     -- Add all scripts with a querystring to the 'cgi' and 'cgi_full_query' keys
-    stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'cgi'}, parsed['path'])
-    stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'cgi_full_query'}, parsed['path_query'])
+    stdnse.registry_add_array({host, 'www', port, 'cgi'}, parsed['path'])
+    stdnse.registry_add_array({host, 'www', port, 'cgi_full_query'}, parsed['path_query'])
 
     -- Add the query string alone to the registry (probably not necessary)
-    stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'cgi_querystring', parsed['path'] }, parsed['raw_querystring'])
+    stdnse.registry_add_array({host, 'www', port, 'cgi_querystring', parsed['path'] }, parsed['raw_querystring'])
 
     -- Add the individual arguments for the page, along with their values
     for key, value in pairs(parsed['querystring']) do
-      stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'cgi_args', parsed['path']}, parsed['querystring'])
+      stdnse.registry_add_array({host, 'www', port, 'cgi_args', parsed['path']}, parsed['querystring'])
     end
   end
 
@@ -2814,7 +2946,7 @@ function save_path(host, port, path, status, links_to, linked_from, contenttype)
     end
 
     for _, v in ipairs(links_to) do
-      stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'links_to', parsed['path_query']}, v)
+      stdnse.registry_add_array({host, 'www', port, 'links_to', parsed['path_query']}, v)
     end
   end
 
@@ -2825,13 +2957,13 @@ function save_path(host, port, path, status, links_to, linked_from, contenttype)
     end
 
     for _, v in ipairs(linked_from) do
-      stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'links_to', v}, parsed['path_query'])
+      stdnse.registry_add_array({host, 'www', port, 'links_to', v}, parsed['path_query'])
     end
   end
 
   -- Save it as a content-type, if we have one
   if(contenttype) then
-    stdnse.registry_add_array({parsed['host'] or host, 'www', parsed['port'] or port, 'content-type', contenttype}, parsed['path_query'])
+    stdnse.registry_add_array({host, 'www', port, 'content-type', contenttype}, parsed['path_query'])
   end
 end
 
@@ -2972,6 +3104,219 @@ do
     end
   end
 
+  local content_encoding_tests = {}
+  table.insert(content_encoding_tests,
+    { name = "nil encoding list",
+      encoding = nil,
+      source = "SomePlaintextBody",
+      target = "SomePlaintextBody",
+      decoded = nil,
+      undecoded = nil
+    })
+  table.insert(content_encoding_tests,
+    { name = "no encoding",
+      encoding = {},
+      source = "SomePlaintextBody",
+      target = "SomePlaintextBody",
+      decoded = {},
+      undecoded = {}
+    })
+  table.insert(content_encoding_tests,
+    { name = "identity encoding",
+      encoding = "identity",
+      source = "SomePlaintextBody",
+      target = "SomePlaintextBody",
+      decoded = {"identity"},
+      undecoded = {}
+    })
+  if have_zlib then
+    table.insert(content_encoding_tests,
+      { name = "gzip encoding",
+        encoding = "gzip",
+        source = stdnse.fromhex("1f8b0800000000000000f348cdc9c9d75108cf2fca49510400d0c34aec0d000000"),
+        target = "Hello, World!",
+        decoded = {"gzip"},
+        undecoded = {}
+      })
+    table.insert(content_encoding_tests,
+      { name = "corrupted gzip encoding",
+        encoding = "gzip",
+        source = stdnse.fromhex("2f8b0800000000000000f348cdc9c9d75108cf2fca49510400d0c34aec0d000000"),
+        target = nil,
+        decoded = {},
+        undecoded = {"gzip"},
+        err = "Corrupted Content-Encoding: gzip",
+        fragment = stdnse.fromhex("2f8b0800000000000000f348cdc9c9d75108cf2fca49510400d0c34aec0d000000")
+      })
+    table.insert(content_encoding_tests,
+      { name = "gzip encoding with maxlen",
+        encoding = "gzip",
+        source = stdnse.fromhex("1f8b0800000000000000f348cdc9c9d75108cf2fca49510400d0c34aec0d000000"),
+        target = "Hello, World!",
+        decoded = {"gzip"},
+        undecoded = {},
+        maxlen = 999
+      })
+    table.insert(content_encoding_tests,
+      { name = "gzip encoding with small maxlen",
+        encoding = "gzip",
+        source = stdnse.fromhex("1f8b0800000000000000f348cdc9c9d75108cf2fca49510400d0c34aec0d000000"),
+        target = nil,
+        decoded = {"gzip"},
+        undecoded = {},
+        maxlen = 4,
+        err = ERR_OVERSIZED_BODY,
+        fragment = "Hell"
+      })
+    table.insert(content_encoding_tests,
+      { name = "gzip encoding with exact maxlen",
+        encoding = "gzip",
+        source = stdnse.fromhex("1f8b0800000000000000f348cdc9c9d75108cf2fca49510400d0c34aec0d000000"),
+        target = "Hello, World!",
+        decoded = {"gzip"},
+        undecoded = {},
+        maxlen = 13
+      })
+    table.insert(content_encoding_tests,
+      { name = "gzip-encoded empty body",
+        encoding = "gzip",
+        source = "",
+        target = "",
+        decoded = {"gzip"},
+        undecoded = {},
+        maxlen = 999
+      })
+  end
+  table.insert(content_encoding_tests,
+    { name = "unknown encoding",
+      encoding = "identity, mystery, miracle",
+      source = stdnse.fromhex("1f8b0800000000000000f348cdc9c9d75108cf2fca49510400d0c34aec0d000000"),
+      target = stdnse.fromhex("1f8b0800000000000000f348cdc9c9d75108cf2fca49510400d0c34aec0d000000"),
+      decoded = {"identity"},
+      undecoded = {"mystery", "miracle"}
+    })
+  if have_zlib then
+    table.insert(content_encoding_tests,
+      { name = "stacked encoding",
+        encoding = "identity, gzip, identity",
+        source = stdnse.fromhex("1f8b0800000000000000f348cdc9c9d75108cf2fca49510400d0c34aec0d000000"),
+        target = "Hello, World!",
+        decoded = {"identity", "gzip", "identity"},
+        undecoded = {}
+      })
+  else
+    table.insert(content_encoding_tests,
+      { name = "stacked encoding",
+        encoding = "identity, gzip, identity",
+        source = stdnse.fromhex("1f8b0800000000000000f348cdc9c9d75108cf2fca49510400d0c34aec0d000000"),
+        target = stdnse.fromhex("1f8b0800000000000000f348cdc9c9d75108cf2fca49510400d0c34aec0d000000"),
+        decoded = {"identity"},
+        undecoded = {"gzip", "identity"}
+      })
+  end
+  for _, test in ipairs(content_encoding_tests) do
+    local body, dcd, undcd, err, fragment = decode_body(test.source, test.encoding, test.maxlen)
+    test_suite:add_test(unittest.equal(body, test.target), test.name .. " (body)")
+    test_suite:add_test(unittest.identical(dcd, test.decoded), test.name .. " (decoded)")
+    test_suite:add_test(unittest.identical(undcd, test.undecoded), test.name .. " (undecoded)")
+    test_suite:add_test(unittest.equal(err, test.err), test.name .. " (err)")
+    test_suite:add_test(unittest.equal(fragment, test.fragment), test.name .. " (fragment)")
+  end
+
+  local parse_redirect_tests = {}
+  table.insert(parse_redirect_tests,
+    { name = "redirect plain URL",
+      host = "example.com",
+      port = 80,
+      path = "initial_path",
+      redirect_scheme = "http",
+      redirect_host = "example.com",
+      redirect_port = 80,
+      redirect_path = "/redirect_path",
+      response = {
+        status = 301,
+        header = {
+          location = "http://example.com:80/redirect_path"
+        }
+      }
+    }
+  )
+  table.insert(parse_redirect_tests,
+    { name = "redirect URL with query",
+      host = "example.com",
+      port = 80,
+      path = "initial_path",
+      redirect_scheme = "http",
+      redirect_host = "example.com",
+      redirect_port = 80,
+      redirect_path = "/redirect_path?query=1234",
+      response = {
+        status = 301,
+        header = {
+          location = "http://example.com:80/redirect_path?query=1234"
+        }
+      }
+    }
+    )
+  table.insert(parse_redirect_tests,
+    { name = "redirect URL with semicolon params",
+      host = "example.com",
+      port = 80,
+      path = "initial_path",
+      redirect_scheme = "http",
+      redirect_host = "example.com",
+      redirect_port = 80,
+      redirect_path = "/redirect_path;param=1234",
+      response = {
+        status = 301,
+        header = {
+          location = "http://example.com:80/redirect_path;param=1234"
+        }
+      }
+    }
+    )
+  table.insert(parse_redirect_tests,
+    { name = "redirect URL with multiple semicolon params",
+      host = "example.com",
+      port = 80,
+      path = "initial_path",
+      redirect_scheme = "http",
+      redirect_host = "example.com",
+      redirect_port = 80,
+      redirect_path = "/redirect_path;param1=1234;param2",
+      response = {
+        status = 301,
+        header = {
+          location = "http://example.com:80/redirect_path;param1=1234;param2"
+        }
+      }
+    }
+    )
+  table.insert(parse_redirect_tests,
+    { name = "redirect URL with semicolon params and query",
+      host = "example.com",
+      port = 80,
+      path = "initial_path",
+      redirect_scheme = "http",
+      redirect_host = "example.com",
+      redirect_port = 80,
+      redirect_path = "/redirect_path;param1=1234;param2&query=abc",
+      response = {
+        status = 301,
+        header = {
+          location = "http://example.com:80/redirect_path;param1=1234;param2&query=abc"
+        }
+      }
+    }
+    )
+
+  for _, test in ipairs(parse_redirect_tests) do
+    local redirect_url = parse_redirect(test.host, test.port, test.path, test.response)
+    test_suite:add_test(unittest.equal(redirect_url.scheme, test.redirect_scheme))
+    test_suite:add_test(unittest.equal(redirect_url.host, test.redirect_host))
+    test_suite:add_test(unittest.equal(redirect_url.port, test.redirect_port))
+    test_suite:add_test(unittest.equal(redirect_url.path, test.redirect_path))
+  end
 end
 
 return _ENV;

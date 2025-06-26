@@ -56,10 +56,7 @@ char	*optarg;		/* argument associated with option */
  *	Parse argc/argv argument vector.
  */
 int
-getopt(nargc, nargv, ostr)
-	int nargc;
-	char * const *nargv;
-	const char *ostr;
+getopt(int nargc, char * const *nargv, const char *ostr)
 {
 	char *cp;
 	static char *__progname;
@@ -83,9 +80,18 @@ getopt(nargc, nargv, ostr)
 			place = EMSG;
 			return (-1);
 		}
-	}					/* option letter okay? */
-	if ((optopt = (int)*place++) == (int)':' ||
-	    !(oli = strchr(ostr, optopt))) {
+	}
+	optopt = (int)*place++;
+	if (optopt == (int)':') {		/* option letter okay? */
+		if (!*place)
+			++optind;
+		if (opterr && *ostr != ':')
+			(void)fprintf(stderr,
+			    "%s: illegal option -- %c\n", __progname, optopt);
+		return (BADCH);
+	}
+	oli = strchr(ostr, optopt);
+	if (!oli) {
 		/*
 		 * if the user didn't specify '-' as an option,
 		 * assume it means -1.
@@ -117,7 +123,7 @@ getopt(nargc, nargv, ostr)
 				    __progname, optopt);
 			return (BADCH);
 		}
-	 	else				/* white space */
+		else				/* white space */
 			optarg = nargv[optind];
 		place = EMSG;
 		++optind;

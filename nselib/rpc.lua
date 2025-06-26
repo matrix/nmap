@@ -82,6 +82,7 @@ local nmap = require "nmap"
 local stdnse = require "stdnse"
 local string = require "string"
 local table = require "table"
+local tableaux = require "tableaux"
 _ENV = stdnse.module("rpc", stdnse.seeall)
 
 -- Version 0.3
@@ -114,14 +115,14 @@ local RPC_PROTOCOLS = (nmap.registry.args and nmap.registry.args[RPC_args['rpcbi
 nmap.registry.args[RPC_args['rpcbind'].proto] or { "tcp", "udp" }
 
 -- used to cache the contents of the rpc datafile
-local RPC_PROGRAMS
+local RPC_PROGRAMS, RPC_NUMBERS
 
 -- local mutex to synchronize I/O operations on nmap.registry[host.ip]['portmapper']
 local mutex = nmap.mutex("rpc")
 
 -- Supported protocol versions
 RPC_version = {
-  ["rpcbind"] = { min=2, max=2 },
+  ["rpcbind"] = { min=2, max=4 },
   ["nfs"] = { min=1, max=3 },
   ["mountd"] = { min=1, max=3 },
 }
@@ -172,7 +173,7 @@ Comm = {
       if nmap.is_privileged() then
         -- Try to bind to a reserved port
         for i = 1, 10, 1 do
-          local resvport = math.random(1, 1024)
+          local resvport = math.random(512, 1023)
           socket = new_socket()
           status, err = socket:bind(nil, resvport)
           if status then
@@ -189,7 +190,7 @@ Comm = {
       if nmap.is_privileged() then
         -- Try to bind to a reserved port
         for i = 1, 10, 1 do
-          local resvport = math.random(1, 1024)
+          local resvport = math.random(512, 1023)
           socket = new_socket("udp")
           status, err = socket:bind(nil, resvport)
           if status then
@@ -577,6 +578,16 @@ Portmap =
       CALLIT = 5,
     },
 
+    [3] =
+    {
+      DUMP = 4,
+    },
+
+    [4] =
+    {
+      DUMP = 4,
+    },
+
   },
 
   State =
@@ -635,11 +646,13 @@ Portmap =
   -- <code>
   -- table[program_id][protocol]["port"] = <port number>
   -- table[program_id][protocol]["version"] = <table of versions>
+  -- table[program_id][protocol]["addr"] = <IP address, for RPCv3 and higher>
   -- </code>
   --
   -- Where
   --  o program_id is the number associated with the program
-  --  o protocol is either "tcp" or "udp"
+  --  o protocol is one of "tcp", "udp", "tcp6", or "udp6", or another netid
+  --    reported by the system.
   --
   Dump = function(self, comm)
     local status, data, packet, response, pos, header
@@ -701,16 +714,40 @@ Portmap =
         break
       end
 
-      program, version, protocol, port, pos = string.unpack(">I4 I4 I4 I4", data, pos)
-      if ( protocol == Portmap.PROTOCOLS.tcp ) then
-        protocol = "tcp"
-      elseif ( protocol == Portmap.PROTOCOLS.udp ) then
-        protocol = "udp"
+      program, version, pos = string.unpack(">I4 I4", data, pos)
+      local addr, owner
+      if comm.version > 2 then
+        local len
+        len, pos = string.unpack(">I4", data, pos)
+        pos, protocol = Util.unmarshall_vopaque(len, data, pos)
+        -- workaround for NetApp 5.0: trim trailing null bytes
+        protocol = protocol:match("[^\0]*")
+        len, pos = string.unpack(">I4", data, pos)
+        pos, addr = Util.unmarshall_vopaque(len, data, pos)
+        len, pos = string.unpack(">I4", data, pos)
+        pos, owner = Util.unmarshall_vopaque(len, data, pos)
+        if protocol:match("^[tu][cd]p6?$") then
+            -- RFC 5665
+            local upper, lower
+            addr, upper, lower = addr:match("^(.-)%.(%d+)%.(%d+)$")
+            if addr then
+              port = tonumber(upper) * 0x100 + tonumber(lower)
+            end
+        end
+      else
+        protocol, port, pos = string.unpack(">I4 I4", data, pos)
+        if ( protocol == Portmap.PROTOCOLS.tcp ) then
+          protocol = "tcp"
+        elseif ( protocol == Portmap.PROTOCOLS.udp ) then
+          protocol = "udp"
+        end
       end
 
       program_table[program] = program_table[program] or {}
       program_table[program][protocol] = program_table[program][protocol] or {}
       program_table[program][protocol]["port"] = port
+      program_table[program][protocol]["addr"] = addr
+      program_table[program][protocol]["owner"] = owner
       program_table[program][protocol]["version"] = program_table[program][protocol]["version"] or {}
       table.insert( program_table[program][protocol]["version"], version )
       -- parts of the code rely on versions being in order
@@ -2761,7 +2798,6 @@ Helper = {
   RpcInfo = function( host, port )
     local status, result
     local portmap = Portmap:new()
-    local comm = Comm:new('rpcbind', 2)
 
     mutex "lock"
 
@@ -2775,21 +2811,27 @@ Helper = {
       return true, nmap.registry[host.ip]['portmapper']
     end
 
-    status, result = comm:Connect(host, port)
-    if (not(status)) then
-      mutex "done"
-      stdnse.debug4("rpc.Helper.RpcInfo: %s", result)
-      return status, result
-    end
+    local pversion = 4
+    while pversion >= 2 do
+      local comm = Comm:new('rpcbind', pversion)
+      status, result = comm:Connect(host, port)
+      if (not(status)) then
+        mutex "done"
+        stdnse.debug4("rpc.Helper.RpcInfo: %s", result)
+        return status, result
+      end
 
-    status, result = portmap:Dump(comm)
-    comm:Disconnect()
+      status, result = portmap:Dump(comm)
+      comm:Disconnect()
+
+      if status then
+        break
+      end
+      stdnse.debug4("rpc.Helper.RpcInfo: %s", result)
+      pversion = pversion - 1
+    end
 
     mutex "done"
-    if (not(status)) then
-      stdnse.debug4("rpc.Helper.RpcInfo: %s", result)
-    end
-
     return status, result
   end,
 
@@ -2837,40 +2879,60 @@ Helper = {
       return status, portmap_table
     end
 
-    local info = {}
     -- assume failure
     status = false
 
-    for _, p in ipairs( RPC_PROTOCOLS ) do
-      local tmp = portmap_table[Util.ProgNameToNumber(program)]
+    local tmp = portmap_table[Util.ProgNameToNumber(program)]
+    if not tmp then
+      return false, "Program not supported by target"
+    end
 
-      if ( tmp and tmp[p] ) then
-        info = {}
+    local info = {}
+    local proginfo
+    local ipv6 = nmap.address_family() == "inet6"
+    ::AF_FALLBACK::
+    for _, p in ipairs( RPC_PROTOCOLS ) do
+      if ipv6 then
+        proginfo = tmp[p .. "6"]
+      else
+        proginfo = tmp[p]
+      end
+      if proginfo then
         info.port = {}
-        info.port.number = tmp[p].port
+        info.port.number = proginfo.port
         info.port.protocol = p
-        -- choose the highest version available
-        if ( not(RPC_version[program]) ) then
-          info.version = tmp[p].version[#tmp[p].version]
-          status = true
-        else
-          for i=#tmp[p].version, 1, -1 do
-            if ( RPC_version[program].max >= tmp[p].version[i] ) then
-              if ( not(max_version) ) then
-                info.version = tmp[p].version[i]
-                status = true
-                break
-              else
-                if ( max_version >= tmp[p].version[i] ) then
-                  info.version = tmp[p].version[i]
-                  status = true
-                  break
-                end
-              end
+        break
+      end
+    end
+    if ipv6 and not proginfo then
+      -- Fall back to trying IPv4
+      ipv6 = false
+      goto AF_FALLBACK
+    end
+
+    if not proginfo then
+      return false, "No transport protocol supported"
+    end
+
+    -- choose the highest version available
+    if ( not(RPC_version[program]) ) then
+      info.version = proginfo.version[#proginfo.version]
+      status = true
+    else
+      for i=#proginfo.version, 1, -1 do
+        if ( RPC_version[program].max >= proginfo.version[i] ) then
+          if ( not(max_version) ) then
+            info.version = proginfo.version[i]
+            status = true
+            break
+          else
+            if ( max_version >= proginfo.version[i] ) then
+              info.version = proginfo.version[i]
+              status = true
+              break
             end
           end
         end
-        break
       end
     end
 
@@ -3389,13 +3451,10 @@ Util =
         return
       end
     end
-    for num, name in pairs(RPC_PROGRAMS) do
-      if ( prog_name == name ) then
-        return num
-      end
+    if not RPC_NUMBERS then
+      RPC_NUMBERS = tableaux.invert(RPC_PROGRAMS)
     end
-
-    return
+    return RPC_NUMBERS[prog_name]
   end,
 
   --- Converts the RPC program number to its equivalent name

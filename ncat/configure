@@ -2246,12 +2246,6 @@ ac_config_headers="$ac_config_headers config.h"
 
 
 
-
-
-
-
-
-
 ac_aux_dir=
 for ac_dir in "$srcdir" "$srcdir/.." "$srcdir/../.."; do
   if test -f "$ac_dir/install-sh"; then
@@ -3800,13 +3794,26 @@ fi
 done
 
 
-for ac_header in fcntl.h limits.h netdb.h netinet/in.h stdlib.h string.h strings.h sys/param.h sys/socket.h sys/time.h sys/timeb.h unistd.h sys/un.h
+for ac_header in fcntl.h limits.h netdb.h netinet/in.h stdlib.h string.h strings.h sys/param.h sys/socket.h sys/time.h unistd.h sys/un.h
 do :
   as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
 ac_fn_c_check_header_mongrel "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default"
 if eval test \"x\$"$as_ac_Header"\" = x"yes"; then :
   cat >>confdefs.h <<_ACEOF
 #define `$as_echo "HAVE_$ac_header" | $as_tr_cpp` 1
+_ACEOF
+
+fi
+
+done
+
+for ac_header in linux/vm_sockets.h
+do :
+  ac_fn_c_check_header_compile "$LINENO" "linux/vm_sockets.h" "ac_cv_header_linux_vm_sockets_h" "#include <sys/socket.h>
+"
+if test "x$ac_cv_header_linux_vm_sockets_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LINUX_VM_SOCKETS_H 1
 _ACEOF
 
 fi
@@ -4326,18 +4333,6 @@ fi
 done
 
 
-for ac_func in dup2 gettimeofday inet_ntoa memset mkstemp select socket strcasecmp strchr strdup strerror strncasecmp strtol
-do :
-  as_ac_var=`$as_echo "ac_cv_func_$ac_func" | $as_tr_sh`
-ac_fn_c_check_func "$LINENO" "$ac_func" "$as_ac_var"
-if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
-  cat >>confdefs.h <<_ACEOF
-#define `$as_echo "HAVE_$ac_func" | $as_tr_cpp` 1
-_ACEOF
-
-fi
-done
-
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing setsockopt" >&5
 $as_echo_n "checking for library containing setsockopt... " >&6; }
 if ${ac_cv_search_setsockopt+:} false; then :
@@ -4512,6 +4507,18 @@ if test "$ac_res" != no; then :
   test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
 
 fi
+
+for ac_func in dup2 gettimeofday inet_ntoa memset mkstemp select socket strcasecmp strchr strdup strerror strncasecmp strtol
+do :
+  as_ac_var=`$as_echo "ac_cv_func_$ac_func" | $as_tr_sh`
+ac_fn_c_check_func "$LINENO" "$ac_func" "$as_ac_var"
+if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
+  cat >>confdefs.h <<_ACEOF
+#define `$as_echo "HAVE_$ac_func" | $as_tr_cpp` 1
+_ACEOF
+
+fi
+done
 
 
 # If they didn't specify it, we try to find it
@@ -5149,7 +5156,7 @@ else
 
   # If they didn't specify it, we try to find it
   if test $have_lua != yes; then
-    for ac_header in lua5.3/lua.h lua/5.3/lua.h lua.h lua/lua.h
+    for ac_header in lua5.4/lua.h lua/5.4/lua.h lua.h lua/lua.h
 do :
   as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
 ac_fn_c_check_header_mongrel "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default"
@@ -5186,7 +5193,7 @@ return lua_isyieldable ();
   return 0;
 }
 _ACEOF
-for ac_lib in '' lua5.3 lua53 lua; do
+for ac_lib in '' lua5.4 lua54 lua; do
   if test -z "$ac_lib"; then
     ac_res="none required"
   else
@@ -5224,29 +5231,29 @@ ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
 ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
 ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
-    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for lua version >= 503" >&5
-$as_echo_n "checking for lua version >= 503... " >&6; }
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for lua version >= 504" >&5
+$as_echo_n "checking for lua version >= 504... " >&6; }
     cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
-      #ifdef HAVE_LUA5_3_LUA_H
-          #include <lua5.3/lua.h>
-      #elif defined HAVE_LUA_5_3_LUA_H
-          #include <lua/5.3/lua.h>
+      #ifdef HAVE_LUA5_4_LUA_H
+          #include <lua5.4/lua.h>
+      #elif defined HAVE_LUA_5_4_LUA_H
+          #include <lua/5.4/lua.h>
       #elif defined HAVE_LUA_H || defined LUA_INCLUDED
           #include <lua.h>
       #elif defined HAVE_LUA_LUA_H
           #include <lua/lua.h>
       #endif
 
-      #if (LUA_VERSION_NUM < 503)
+      #if (LUA_VERSION_NUM < 504)
           #error Incorrect Lua version
       #endif
 
 int
 main ()
 {
-if(LUA_VERSION_NUM < 503) return 1;
+if(LUA_VERSION_NUM < 504) return 1;
   ;
   return 0;
 }

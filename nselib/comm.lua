@@ -25,6 +25,8 @@
 local nmap = require "nmap"
 local shortport
 local stdnse = require "stdnse"
+local tableaux = require "tableaux"
+local oops = require "oops"
 _ENV = stdnse.module("comm", stdnse.seeall)
 
 -- This timeout value (in ms) is added to the connect timeout and represents
@@ -59,7 +61,10 @@ end
 
 -- Sets up the socket and connects to host:port
 local setup_connect = function(host, port, opts)
-  local sock = nmap.new_socket()
+  local sock = nmap.new_socket(
+    (opts.proto ~= "ssl" and opts.proto)
+    or (type(port) == "table" and port.protocol)
+    or nil)
 
   local connect_timeout, request_timeout = get_timeouts(host, opts)
 
@@ -76,7 +81,7 @@ local setup_connect = function(host, port, opts)
 
   if not status then
     sock:close()
-    return status, err
+    return oops.raise("Could not connect", status, err)
   end
 
   sock:set_timeout(request_timeout)
@@ -85,20 +90,15 @@ local setup_connect = function(host, port, opts)
 end
 
 local read = function(sock, opts)
-  local response, status
-
   if opts.lines then
-    status, response = sock:receive_lines(opts.lines)
-    return status, response
+    return oops.raise("receive_lines failed", sock:receive_lines(opts.lines))
   end
 
   if opts.bytes then
-    status, response = sock:receive_bytes(opts.bytes)
-    return status, response
+    return oops.raise("receive_bytes failed", sock:receive_bytes(opts.bytes))
   end
 
-  status, response = sock:receive()
-  return status, response
+  return oops.raise("receive failed", sock:receive())
 end
 
 --- This function simply connects to the specified port number on the
@@ -115,12 +115,12 @@ end
 get_banner = function(host, port, opts)
   opts = opts or {}
   opts.recv_before = true
-  local socket, nothing, correct, banner = tryssl(host, port, "", opts)
+  local socket, errmsg, correct, banner = oops.raise("tryssl failed", tryssl(host, port, nil, opts))
   if socket then
     socket:close()
     return true, banner
   end
-  return false, banner
+  return false, errmsg
 end
 
 --- This function connects to the specified port number on the specified
@@ -143,21 +143,21 @@ exchange = function(host, port, data, opts)
 
   if not status then
     -- sock is an error message in this case
-    return status, sock
+    return oops.raise("Failed to connect", status, sock)
   end
 
   status, ret = sock:send(data)
 
   if not status then
     sock:close()
-    return status, ret
+    return oops.raise("Failed to send", status, ret)
   end
 
   status, ret = read(sock, opts)
 
   sock:close()
 
-  return status, ret
+  return oops.raise("Failed to read", status, ret)
 end
 
 --- This function uses shortport.ssl to check if the port is a likely SSL port
@@ -178,25 +178,12 @@ end
 -- @return Best option ("tcp" or "ssl")
 -- @return Worst option ("tcp" or "ssl")
 local function bestoption(port)
-  if type(port) == 'table' then
-    if port.protocol == "udp" then
-      stdnse.debug2("DTLS (SSL over UDP) is not supported")
-      return "udp", "udp"
-    end
-    if port.version and port.version.service_tunnel and port.version.service_tunnel == "ssl" then return "ssl","tcp" end
-    if port.version and port.version.name_confidence and port.version.name_confidence > 6 then return "tcp","ssl" end
-    local _port = {
-      number = port.number,
-      service = port.service,
-      protocol = port.protocol or "tcp",
-      state = port.state or "open",
-      version = port.version
-    }
-    if is_ssl(_port) then return "ssl","tcp" end
-  elseif type(port) == 'number' then
-    if is_ssl({number=port, protocol="tcp", state="open"}) then return "ssl","tcp" end
+  assert(type(port) == 'table', "bestoption: port must be a table")
+  assert(port.protocol, "bestoption: port table must have protocol field")
+  if is_ssl(port) then
+    return "ssl", port.protocol
   end
-  return "tcp","ssl"
+  return port.protocol, "ssl"
 end
 
 --- This function opens a connection, sends the first data payload and
@@ -205,7 +192,7 @@ end
 --
 -- Possible options:
 -- timeout, connect_timeout, request_timeout: See module documentation
--- recv_before: receive data before sending first payload
+-- recv_before: receive data before sending first payload (not valid for "udp")
 -- proto: the protocol to use ("tcp", "udp", or "ssl")
 --
 -- @param host The destination host IP
@@ -218,24 +205,28 @@ end
 -- of the first receive (before sending data)
 function opencon(host, port, data, opts)
   opts = opts or {}
+  local proto = opts.proto or (type(port) == 'table' and port.protocol)
+  if proto == "udp" then
+    assert(not opts.recv_before, "opts.recv_before not compatible with UDP.")
+    assert(data, "opencon with UDP requires a data payload.")
+  end
   local status, sd = setup_connect(host, port, opts)
   if not status then
-    return nil, sd, nil
+    return oops.raise("Failed to connect", false, sd)
   end
 
-  local response, early_resp;
-  if opts.recv_before then status, early_resp = read(sd, opts) end
+  local response, early_resp
+  if opts.recv_before then status, early_resp = oops.raise("read failed", read(sd, opts)) end
   if data and #data > 0 then
     sd:send(data)
-    status, response = sd:receive()
+    status, response = oops.raise("receive failed", sd:receive())
   else
     response = early_resp
   end
   if not status then
     sd:close()
-    return nil, response, early_resp
   end
-  return sd, response, early_resp
+  return status and sd, response, early_resp
 end
 
 --- Opens a SSL connection if possible, with fallback to plain text.
@@ -256,6 +247,7 @@ end
 -- @param data The first data payload of the connection. Optional if
 --             <code>opts.recv_before</code> is true.
 -- @param opts Options, such as timeout
+--             Note that opts.proto will get set to correctOpt (see below)
 -- @return sd The socket descriptor, or nil on error
 -- @return response The response received for the payload, or an error message
 -- @return correctOpt Correct option for connection guess
@@ -263,26 +255,42 @@ end
 -- of the first receive (before sending data)
 function tryssl(host, port, data, opts)
   opts = opts or {}
-  if not data and not opts.recv_before then
-    stdnse.debug1(
+  assert(opts.proto ~= "ssl", "tryssl: opts.proto must not be 'ssl'")
+  local our_port
+  if type(port) == 'table' then
+    if (opts.proto) then
+      assert(opts.proto == port.protocol, "tryssl: opts.proto mismatch port.protocol")
+    end
+    our_port = tableaux.tcopy(port)
+    our_port.state = "open"
+  else
+    our_port = {
+      number = port,
+      protocol = opts.proto or "tcp",
+      state = "open",
+    }
+  end
+  if not data then
+    assert(our_port.protocol ~= "udp",
+      "Using comm.tryssl with UDP requires first data payload.\n\z
+      Impossible to test the connection for the correct protocol!"
+      )
+    assert(opts.recv_before,
       "Using comm.tryssl without either first data payload or opts.recv_before.\n\z
       Impossible to test the connection for the correct protocol!"
       )
   end
-  local opt1, opt2 = bestoption(port)
-  local best = opt1
-  if opts.proto=="udp" then
-    stdnse.debug2("DTLS (SSL over UDP) is not supported")
+  local best = "none"
+  local sd, response, early_resp
+  for _, proto in ipairs({ bestoption(our_port) }) do
+    opts.proto = proto
+    sd, response, early_resp = oops.raise(("%s failed"):format(proto),
+      opencon(host, our_port, data, opts))
+    if sd then
+      best = proto
+      break
+    end
   end
-  opts.proto = opt1
-  local sd, response, early_resp = opencon(host, port, data, opts)
-  -- Try the second option (If udp, then both options are the same; skip it)
-  if not sd and opt1 ~= "udp" then
-    opts.proto = opt2
-    sd, response, early_resp = opencon(host, port, data, opts)
-    best = opt2
-  end
-  if not sd then best = "none" end
   return sd, response, best, early_resp
 end
 
@@ -291,8 +299,6 @@ if not unittest.testing() then
   return _ENV
 end
 test_suite = unittest.TestSuite:new()
-test_suite:add_test(unittest.table_equal({bestoption(443)}, {"ssl", "tcp"}), "bestoption ssl number")
-test_suite:add_test(unittest.table_equal({bestoption(80)}, {"tcp", "ssl"}), "bestoption tcp number")
 test_suite:add_test(unittest.table_equal({bestoption({number=8443,protocol="tcp",state="open"})}, {"ssl", "tcp"}), "bestoption ssl table")
 test_suite:add_test(unittest.table_equal({bestoption({number=1234,protocol="tcp",state="open"})}, {"tcp", "ssl"}), "bestoption tcp table")
 

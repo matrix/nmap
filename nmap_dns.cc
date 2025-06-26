@@ -1,133 +1,64 @@
 
 /***************************************************************************
- * nmap_dns.cc -- Handles parallel reverse DNS resolution for target IPs   *
+ * nmap_dns.cc -- Handles parallel DNS resolution for target IPs           *
  *                                                                         *
  ***********************IMPORTANT NMAP LICENSE TERMS************************
- *                                                                         *
- * The Nmap Security Scanner is (C) 1996-2018 Insecure.Com LLC ("The Nmap  *
- * Project"). Nmap is also a registered trademark of the Nmap Project.     *
- * This program is free software; you may redistribute and/or modify it    *
- * under the terms of the GNU General Public License as published by the   *
- * Free Software Foundation; Version 2 ("GPL"), BUT ONLY WITH ALL OF THE   *
- * CLARIFICATIONS AND EXCEPTIONS DESCRIBED HEREIN.  This guarantees your   *
- * right to use, modify, and redistribute this software under certain      *
- * conditions.  If you wish to embed Nmap technology into proprietary      *
- * software, we sell alternative licenses (contact sales@nmap.com).        *
- * Dozens of software vendors already license Nmap technology such as      *
- * host discovery, port scanning, OS detection, version detection, and     *
- * the Nmap Scripting Engine.                                              *
- *                                                                         *
- * Note that the GPL places important restrictions on "derivative works",  *
- * yet it does not provide a detailed definition of that term.  To avoid   *
- * misunderstandings, we interpret that term as broadly as copyright law   *
- * allows.  For example, we consider an application to constitute a        *
- * derivative work for the purpose of this license if it does any of the   *
- * following with any software or content covered by this license          *
- * ("Covered Software"):                                                   *
- *                                                                         *
- * o Integrates source code from Covered Software.                         *
- *                                                                         *
- * o Reads or includes copyrighted data files, such as Nmap's nmap-os-db   *
- * or nmap-service-probes.                                                 *
- *                                                                         *
- * o Is designed specifically to execute Covered Software and parse the    *
- * results (as opposed to typical shell or execution-menu apps, which will *
- * execute anything you tell them to).                                     *
- *                                                                         *
- * o Includes Covered Software in a proprietary executable installer.  The *
- * installers produced by InstallShield are an example of this.  Including *
- * Nmap with other software in compressed or archival form does not        *
- * trigger this provision, provided appropriate open source decompression  *
- * or de-archiving software is widely available for no charge.  For the    *
- * purposes of this license, an installer is considered to include Covered *
- * Software even if it actually retrieves a copy of Covered Software from  *
- * another source during runtime (such as by downloading it from the       *
- * Internet).                                                              *
- *                                                                         *
- * o Links (statically or dynamically) to a library which does any of the  *
- * above.                                                                  *
- *                                                                         *
- * o Executes a helper program, module, or script to do any of the above.  *
- *                                                                         *
- * This list is not exclusive, but is meant to clarify our interpretation  *
- * of derived works with some common examples.  Other people may interpret *
- * the plain GPL differently, so we consider this a special exception to   *
- * the GPL that we apply to Covered Software.  Works which meet any of     *
- * these conditions must conform to all of the terms of this license,      *
- * particularly including the GPL Section 3 requirements of providing      *
- * source code and allowing free redistribution of the work as a whole.    *
- *                                                                         *
- * As another special exception to the GPL terms, the Nmap Project grants  *
- * permission to link the code of this program with any version of the     *
- * OpenSSL library which is distributed under a license identical to that  *
- * listed in the included docs/licenses/OpenSSL.txt file, and distribute   *
- * linked combinations including the two.                                  *
- *                                                                         *
- * The Nmap Project has permission to redistribute Npcap, a packet         *
- * capturing driver and library for the Microsoft Windows platform.        *
- * Npcap is a separate work with it's own license rather than this Nmap    *
- * license.  Since the Npcap license does not permit redistribution        *
- * without special permission, our Nmap Windows binary packages which      *
- * contain Npcap may not be redistributed without special permission.      *
- *                                                                         *
- * Any redistribution of Covered Software, including any derived works,    *
- * must obey and carry forward all of the terms of this license, including *
- * obeying all GPL rules and restrictions.  For example, source code of    *
- * the whole work must be provided and free redistribution must be         *
- * allowed.  All GPL references to "this License", are to be treated as    *
- * including the terms and conditions of this license text as well.        *
- *                                                                         *
- * Because this license imposes special exceptions to the GPL, Covered     *
- * Work may not be combined (even as part of a larger work) with plain GPL *
- * software.  The terms, conditions, and exceptions of this license must   *
- * be included as well.  This license is incompatible with some other open *
- * source licenses as well.  In some cases we can relicense portions of    *
- * Nmap or grant special permissions to use it in other open source        *
- * software.  Please contact fyodor@nmap.org with any such requests.       *
- * Similarly, we don't incorporate incompatible open source software into  *
- * Covered Software without special permission from the copyright holders. *
- *                                                                         *
- * If you have any questions about the licensing restrictions on using     *
- * Nmap in other works, we are happy to help.  As mentioned above, we also *
- * offer an alternative license to integrate Nmap into proprietary         *
- * applications and appliances.  These contracts have been sold to dozens  *
- * of software vendors, and generally include a perpetual license as well  *
- * as providing support and updates.  They also fund the continued         *
- * development of Nmap.  Please email sales@nmap.com for further           *
- * information.                                                            *
- *                                                                         *
- * If you have received a written license agreement or contract for        *
- * Covered Software stating terms other than these, you may choose to use  *
- * and redistribute Covered Software under those terms instead of these.   *
- *                                                                         *
- * Source is provided to this software because we believe users have a     *
- * right to know exactly what a program is going to do before they run it. *
- * This also allows you to audit the software for security holes.          *
- *                                                                         *
- * Source code also allows you to port Nmap to new platforms, fix bugs,    *
- * and add new features.  You are highly encouraged to send your changes   *
- * to the dev@nmap.org mailing list for possible incorporation into the    *
- * main distribution.  By sending these changes to Fyodor or one of the    *
- * Insecure.Org development mailing lists, or checking them into the Nmap  *
- * source code repository, it is understood (unless you specify            *
- * otherwise) that you are offering the Nmap Project the unlimited,        *
- * non-exclusive right to reuse, modify, and relicense the code.  Nmap     *
- * will always be available Open Source, but this is important because     *
- * the inability to relicense code has caused devastating problems for     *
- * other Free Software projects (such as KDE and NASM).  We also           *
- * occasionally relicense the code to third parties as discussed above.    *
- * If you wish to specify special license conditions of your               *
- * contributions, just say so when you send them.                          *
- *                                                                         *
- * This program is distributed in the hope that it will be useful, but     *
- * WITHOUT ANY WARRANTY; without even the implied warranty of              *
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the Nmap      *
- * license file for more details (it's in a COPYING file included with     *
- * Nmap, and also available from https://svn.nmap.org/nmap/COPYING)        *
- *                                                                         *
+ *
+ * The Nmap Security Scanner is (C) 1996-2025 Nmap Software LLC ("The Nmap
+ * Project"). Nmap is also a registered trademark of the Nmap Project.
+ *
+ * This program is distributed under the terms of the Nmap Public Source
+ * License (NPSL). The exact license text applying to a particular Nmap
+ * release or source code control revision is contained in the LICENSE
+ * file distributed with that version of Nmap or source code control
+ * revision. More Nmap copyright/legal information is available from
+ * https://nmap.org/book/man-legal.html, and further information on the
+ * NPSL license itself can be found at https://nmap.org/npsl/ . This
+ * header summarizes some key points from the Nmap license, but is no
+ * substitute for the actual license text.
+ *
+ * Nmap is generally free for end users to download and use themselves,
+ * including commercial use. It is available from https://nmap.org.
+ *
+ * The Nmap license generally prohibits companies from using and
+ * redistributing Nmap in commercial products, but we sell a special Nmap
+ * OEM Edition with a more permissive license and special features for
+ * this purpose. See https://nmap.org/oem/
+ *
+ * If you have received a written Nmap license agreement or contract
+ * stating terms other than these (such as an Nmap OEM license), you may
+ * choose to use and redistribute Nmap under those terms instead.
+ *
+ * The official Nmap Windows builds include the Npcap software
+ * (https://npcap.com) for packet capture and transmission. It is under
+ * separate license terms which forbid redistribution without special
+ * permission. So the official Nmap Windows builds may not be redistributed
+ * without special permission (such as an Nmap OEM license).
+ *
+ * Source is provided to this software because we believe users have a
+ * right to know exactly what a program is going to do before they run it.
+ * This also allows you to audit the software for security holes.
+ *
+ * Source code also allows you to port Nmap to new platforms, fix bugs, and
+ * add new features. You are highly encouraged to submit your changes as a
+ * Github PR or by email to the dev@nmap.org mailing list for possible
+ * incorporation into the main distribution. Unless you specify otherwise, it
+ * is understood that you are offering us very broad rights to use your
+ * submissions as described in the Nmap Public Source License Contributor
+ * Agreement. This is important because we fund the project by selling licenses
+ * with various terms, and also because the inability to relicense code has
+ * caused devastating problems for other Free Software projects (such as KDE
+ * and NASM).
+ *
+ * The free version of Nmap is distributed in the hope that it will be
+ * useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. Warranties,
+ * indemnification and commercial support are all available through the
+ * Npcap OEM program--see https://nmap.org/oem/
+ *
  ***************************************************************************/
 
-// mass_rdns - Parallel Asynchronous Reverse DNS Resolution
+// mass_dns - Parallel Asynchronous DNS Resolution
 //
 // One of Nmap's features is to perform reverse DNS queries
 // on large number of IP addresses. Nmap supports 2 different
@@ -181,10 +112,15 @@
 // * Figure out best way to estimate completion time
 //   and display it in a ScanProgressMeter
 
+#include <limits.h>
+#include <list>
+#include <fstream>
+#include <istream>
+
 #ifdef WIN32
 #include "nmap_winconfig.h"
-/* Need DnetName2PcapName */
-#include "libnetutil/netutil.h"
+#include <winsock2.h>
+#include <iphlpapi.h>
 #endif
 
 #include "nmap.h"
@@ -197,11 +133,6 @@
 #include "timing.h"
 #include "Target.h"
 
-#include <stdlib.h>
-#include <limits.h>
-#include <list>
-#include <vector>
-
 extern NmapOps o;
 
 
@@ -210,10 +141,10 @@ extern NmapOps o;
 
 // Algorithm:
 //
-// A batch of num_targets hosts is passed to nmap_mass_rdns():
-//   void nmap_mass_rdns(Target **targets, int num_targets)
+// A batch of num_requests requests is passed to nmap_mass_dns():
+//   void nmap_mass_dns(DNS::Request requests[], int num_requests);
 //
-// mass_dns sends out CAPACITY_MIN of these hosts to the DNS
+// mass_dns sends out CAPACITY_MIN of these requests to the DNS
 // servers detected, alternating in sequence.
 
 // When a request is fulfilled (either a resolved domain, NXDomain,
@@ -238,17 +169,19 @@ extern NmapOps o;
 
 // In milliseconds
 // Each row MUST be terminated with -1
-static int read_timeouts[][4] = {
-  { 4000, 4000, 5000, -1 }, // 1 server
-  { 2500, 4000,   -1, -1 }, // 2 servers
-  { 2500, 3000,   -1, -1 }, // 3+ servers
+#define MAX_DNS_TRIES 3
+#define MIN_DNS_TIMEOUT (MIN_RTT_TIMEOUT * 5)
+static int read_timeouts[][MAX_DNS_TRIES + 1] = {
+  { 2 * MIN_DNS_TIMEOUT, 3 * MIN_DNS_TIMEOUT, 4 * MIN_DNS_TIMEOUT, -1 }, // 1 server
+  { 2 * MIN_DNS_TIMEOUT, 2 * MIN_DNS_TIMEOUT,                   -1, -1 }, // 2 servers
+  {     MIN_DNS_TIMEOUT, 2 * MIN_DNS_TIMEOUT,                   -1, -1 }, // 3+ servers
 };
 
 #define CAPACITY_MIN 10
-#define CAPACITY_MAX 200
+#define CAPACITY_MAX 100
 #define CAPACITY_UP_STEP 2
-#define CAPACITY_MINOR_DOWN_SCALE 0.9
-#define CAPACITY_MAJOR_DOWN_SCALE 0.7
+#define CAPACITY_MINOR_DOWN_SCALE 0.7
+#define CAPACITY_MAJOR_DOWN_SCALE 0.4
 
 // Each request will try to resolve on at most this many servers:
 #define SERVERS_TO_TRY 3
@@ -275,26 +208,46 @@ struct request;
 typedef struct sockaddr_storage sockaddr_storage;
 
 struct dns_server {
+  enum status_t {
+    DISCONNECTED,
+    CONNECTING,
+    CONNECTED
+  };
   std::string hostname;
   sockaddr_storage addr;
   size_t addr_len;
   nsock_iod nsd;
-  int connected;
+  status_t status;
   int reqs_on_wire;
   int capacity;
+  int ssthresh;
   int write_busy;
   std::list<request *> to_process;
   std::list<request *> in_process;
+  struct timeval last_increase;
+  dns_server() : hostname(), addr_len(0), status(DISCONNECTED), reqs_on_wire(0),
+    capacity(CAPACITY_MIN), ssthresh((CAPACITY_MAX + CAPACITY_MIN)/2), write_busy(0), to_process(), in_process()
+  {
+    memset(&addr, 0, sizeof(addr));
+    memset(&last_increase, 0, sizeof(last_increase));
+  }
 };
 
 struct request {
-  Target *targ;
-  struct timeval timeout;
+  DNS::Request *targ;
+  struct timeval sent;
   int tries;
   int servers_tried;
   dns_server *first_server;
   dns_server *curr_server;
   u16 id;
+  bool alt_req;
+  ~request() {
+    if (alt_req && targ) {
+      delete targ;
+      targ = NULL;
+    }
+  }
 };
 
 /*keeps record of a request going through a particular DNS server
@@ -342,7 +295,7 @@ public:
     delete[] hosts_storage;
   }
 
-  u32 hash(sockaddr_storage ip)
+  u32 hash(const sockaddr_storage &ip) const
   {
     u32 ret = 0;
 
@@ -443,6 +396,9 @@ static nsock_pool dnspool=NULL;
 
 /* The DNS cache, not just for entries from /etc/hosts. */
 static HostCache host_cache;
+/* Forward lookup table from /etc/hosts */
+typedef std::pair<std::string, DNS::RECORD_TYPE> NameRecord;
+static std::map<NameRecord, sockaddr_storage> etchosts;
 
 static int stat_actual, stat_ok, stat_nx, stat_sf, stat_trans, stat_dropped, stat_cname;
 static struct timeval starttv;
@@ -469,8 +425,8 @@ static void output_summary() {
   memcpy(&now, nsock_gettimeofday(), sizeof(struct timeval));
 
   if (o.debugging && (tp%SUMMARY_DELAY == 0))
-    log_write(LOG_STDOUT, "mass_rdns: %.2fs %d/%d [#: %lu, OK: %d, NX: %d, DR: %d, SF: %d, TR: %d]\n",
-                    TIMEVAL_MSEC_SUBTRACT(now, starttv) / 1000.0,
+    log_write(LOG_STDOUT, "mass_dns: %.2fs %d/%d [#: %lu, OK: %d, NX: %d, DR: %d, SF: %d, TR: %d]\n",
+                    TIMEVAL_FSEC_SUBTRACT(now, starttv),
                     tp, stat_actual,
                     (unsigned long) servs.size(), stat_ok, stat_nx, stat_dropped, stat_sf, stat_trans);
 }
@@ -486,87 +442,125 @@ static void close_dns_servers() {
   std::list<dns_server>::iterator serverI;
 
   for(serverI = servs.begin(); serverI != servs.end(); serverI++) {
-    if (serverI->connected) {
+    if (serverI->status != dns_server::DISCONNECTED) {
       nsock_iod_delete(serverI->nsd, NSOCK_PENDING_SILENT);
-      serverI->connected = 0;
+      serverI->status = dns_server::DISCONNECTED;
       serverI->to_process.clear();
       serverI->in_process.clear();
     }
   }
+  nsock_loop_quit(dnspool);
 }
-
 
 // Puts as many packets on the line as capacity will allow
 static void do_possible_writes() {
   std::list<dns_server>::iterator servI;
   request *tpreq;
+  bool all_servs_disconnected = true;
 
   for(servI = servs.begin(); servI != servs.end(); servI++) {
+    switch (servI->status) {
+      case dns_server::CONNECTED:
+        all_servs_disconnected = false;
+        break;
+      case dns_server::CONNECTING:
+        all_servs_disconnected = false;
+      case dns_server::DISCONNECTED:
+        continue;
+        break;
+    }
     if (servI->write_busy == 0 && servI->reqs_on_wire < servI->capacity) {
       tpreq = NULL;
-      if (!servI->to_process.empty()) {
-        tpreq = servI->to_process.front();
-        servI->to_process.pop_front();
-      } else if (!new_reqs.empty()) {
+      if (!new_reqs.empty()) {
         tpreq = new_reqs.front();
         assert(tpreq != NULL);
         tpreq->first_server = tpreq->curr_server = &*servI;
         new_reqs.pop_front();
+      } else if (!servI->to_process.empty()) {
+        tpreq = servI->to_process.front();
+        servI->to_process.pop_front();
       }
 
       if (tpreq) {
         if (o.debugging >= TRACE_DEBUG_LEVEL)
-           log_write(LOG_STDOUT, "mass_rdns: TRANSMITTING for <%s> (server <%s>)\n", tpreq->targ->targetipstr() , servI->hostname.c_str());
+           log_write(LOG_STDOUT, "mass_dns: TRANSMITTING for <%s> (server <%s>)\n", tpreq->targ->repr(), servI->hostname.c_str());
         stat_trans++;
         put_dns_packet_on_wire(tpreq);
       }
     }
   }
+  if (all_servs_disconnected) {
+    nsock_loop_quit(dnspool);
+  }
 }
 
 // nsock write handler
 static void write_evt_handler(nsock_pool nsp, nsock_event evt, void *req_v) {
+  assert(nse_type(evt) == NSE_TYPE_WRITE);
   info record;
   request *req = (request *) req_v;
 
   req->curr_server->write_busy = 0;
 
-  req->curr_server->in_process.push_front(req);
-  record.tpreq = req;
-  record.server = req->curr_server;
-  records[req->id] = record;
+  if (nse_status(evt) == NSE_STATUS_SUCCESS) {
+    req->curr_server->in_process.push_front(req);
+    record.tpreq = req;
+    record.server = req->curr_server;
+    records[req->id] = record;
+    do_possible_writes();
+  }
+  else {
+    if (o.debugging) {
+      log_write(LOG_STDOUT, "mass_dns: WRITE error: %s", nse_status2str(nse_status(evt)));
+    }
+    req->curr_server->to_process.push_front(req);
+  }
 
-  do_possible_writes();
+}
+
+static DNS::RECORD_TYPE wire_type(DNS::RECORD_TYPE t) {
+  if (t == DNS::ANY) {
+    return DNS::A;
+  }
+  return t;
 }
 
 // Takes a DNS request structure and actually puts it on the wire
 // (calls nsock_write()). Does various other tasks like recording
 // the time for the timeout.
 static void put_dns_packet_on_wire(request *req) {
-  const size_t maxlen = 512;
+  static const size_t maxlen = 512;
   u8 packet[maxlen];
   size_t plen=0;
 
-  struct timeval now, timeout;
-
-  req->id = DNS::Factory::progressiveId;
   req->curr_server->write_busy = 1;
   req->curr_server->reqs_on_wire++;
+  DNS::Request &reqt = *req->targ;
 
-  plen = DNS::Factory::buildReverseRequest(*req->targ->TargetSockAddr(), packet, maxlen);
+  switch(reqt.type) {
+    case DNS::ANY:
+    case DNS::A:
+    case DNS::AAAA:
+      plen = DNS::Factory::buildSimpleRequest(req->id, reqt.name, wire_type(reqt.type), packet, maxlen);
+      break;
+    case DNS::PTR:
+      assert(reqt.ssv.size() > 0);
+      plen = DNS::Factory::buildReverseRequest(req->id, reqt.ssv.front(), packet, maxlen);
+      break;
+    default:
+      // Unhandled type. Should have been dealt with earlier.
+      assert(false);
+      break;
+  }
 
-  memcpy(&now, nsock_gettimeofday(), sizeof(struct timeval));
-  TIMEVAL_MSEC_ADD(timeout, now, read_timeouts[read_timeout_index][req->tries]);
-  memcpy(&req->timeout, &timeout, sizeof(struct timeval));
-
-  req->tries++;
+  memcpy(&req->sent, nsock_gettimeofday(), sizeof(struct timeval));
 
   nsock_write(dnspool, req->curr_server->nsd, write_evt_handler, WRITE_TIMEOUT, req, reinterpret_cast<const char *>(packet), plen);
 }
 
 // Processes DNS packets that have timed out
 // Returns time until next read timeout
-static int deal_with_timedout_reads() {
+static int deal_with_timedout_reads(bool adjust_timing) {
   std::list<dns_server>::iterator servI;
   std::list<dns_server>::iterator servItemp;
   std::list<request *>::iterator reqI;
@@ -585,26 +579,39 @@ static int deal_with_timedout_reads() {
     nextI = servI->in_process.begin();
     if (nextI == servI->in_process.end()) continue;
 
+    struct timeval earliest_sent = now;
+    bool adjusted = !adjust_timing;
+    bool may_increase = adjust_timing;
     do {
       reqI = nextI++;
       tpreq = *reqI;
 
-      tp = TIMEVAL_MSEC_SUBTRACT(tpreq->timeout, now);
-      if (tp > 0 && tp < min_timeout) min_timeout = tp;
+      int to = read_timeouts[read_timeout_index][tpreq->tries];
 
-      if (tp <= 0) {
-        servI->capacity = (int) (servI->capacity * CAPACITY_MINOR_DOWN_SCALE);
-        check_capacities(&*servI);
+      int elapsed = TIMEVAL_MSEC_SUBTRACT(now, tpreq->sent);
+      tp = to - elapsed;
+      if (tp > 0) {
+        // only bother checking this if we might increase the capacity
+        if (may_increase && TIMEVAL_BEFORE(tpreq->sent, earliest_sent)) {
+          earliest_sent = tpreq->sent;
+        }
+        if (tp < min_timeout) min_timeout = tp;
+      }
+      else {
+        may_increase = false;
+        tpreq->tries++;
         servI->in_process.erase(reqI);
-        std::map<u16, info>::iterator it = records.find(tpreq->id);
-        if ( it != records.end() )
-          records.erase(it);
+        records.erase(tpreq->id);
         servI->reqs_on_wire--;
 
         // If we've tried this server enough times, move to the next one
         if (read_timeouts[read_timeout_index][tpreq->tries] == -1) {
-          servI->capacity = (int) (servI->capacity * CAPACITY_MAJOR_DOWN_SCALE);
-          check_capacities(&*servI);
+          if (!adjusted && tpreq->servers_tried == 0) {
+            servI->ssthresh = MIN(servI->ssthresh, servI->capacity);
+            servI->capacity = (int) (servI->capacity * CAPACITY_MAJOR_DOWN_SCALE);
+            check_capacities(&*servI);
+            adjusted = true;
+          }
 
           servItemp = servI;
           servItemp++;
@@ -622,15 +629,14 @@ static int deal_with_timedout_reads() {
             // FIXME: Find a good compromise
 
             // **** We've already tried all servers... give up
-            if (o.debugging >= TRACE_DEBUG_LEVEL) log_write(LOG_STDOUT, "mass_rdns: *DR*OPPING <%s>\n", tpreq->targ->targetipstr());
+            if (o.debugging >= TRACE_DEBUG_LEVEL) log_write(LOG_STDOUT, "mass_dns: *DR*OPPING <%s>\n", tpreq->targ->repr());
 
             output_summary();
             stat_dropped++;
             total_reqs--;
-            infoI = records.find(tpreq->id);
-            if ( infoI != records.end() )
-              records.erase(infoI);
+            records.erase(tpreq->id);
             delete tpreq;
+            tpreq = NULL;
 
             // **** OR We start at the back of this server's queue
             //servItemp->to_process.push_back(tpreq);
@@ -638,13 +644,24 @@ static int deal_with_timedout_reads() {
             servItemp->to_process.push_back(tpreq);
           }
         } else {
+          if (!adjusted && tpreq->servers_tried == 0 && tpreq->tries <= 1) {
+            servI->ssthresh = MIN(servI->ssthresh, servI->capacity);
+            servI->capacity = (int) (servI->capacity * CAPACITY_MINOR_DOWN_SCALE);
+            check_capacities(&*servI);
+            adjusted = true;
+          }
           servI->to_process.push_back(tpreq);
         }
 
-    }
+      }
 
     } while (nextI != servI->in_process.end());
 
+    if (may_increase && TIMEVAL_MSEC_SUBTRACT(earliest_sent, servI->last_increase) > (MIN_DNS_TIMEOUT) && servI->reqs_on_wire > servI->capacity - 2*CAPACITY_UP_STEP) {
+      servI->capacity += CAPACITY_UP_STEP;
+      check_capacities(&*servI);
+      servI->last_increase = now;
+    }
   }
 
   if (min_timeout > 500) return 500;
@@ -652,66 +669,112 @@ static int deal_with_timedout_reads() {
 
 }
 
-// After processing a DNS response, we search through the IPs we're
-// looking for and update their results as necessary.
-// Returns non-zero if this matches a query we're looking for
-static int process_result(const sockaddr_storage &ip, const std::string &result, int action, u16 id)
-{
-  request *tpreq;
-  std::map<u16, info>::iterator infoI;
-  dns_server *server;
+static bool is_primary_req(const request *req) {
+  if (req->alt_req) {
+    return (o.af() == AF_INET6);
+  }
+  else if (req->targ->type == DNS::ANY) {
+    return (o.af() == AF_INET);
+  }
+  return true;
+}
 
-  infoI = records.find(id);
+static void process_request(int action, info &reqinfo) {
+  request *tpreq = reqinfo.tpreq;
+  dns_server *server = reqinfo.server;
 
-  if( infoI != records.end() ){
-
-    tpreq = infoI->second.tpreq;
-    server = infoI->second.server;
-
-    if( !result.empty() && !sockaddr_storage_equal(&ip, tpreq->targ->TargetSockAddr()) )
-      return 0;
-
-    if (action == ACTION_SYSTEM_RESOLVE || action == ACTION_FINISHED)
-    {
-      server->capacity += CAPACITY_UP_STEP;
-      check_capacities(&*server);
-
-      if(!result.empty())
-      {
-        tpreq->targ->setHostName(result.c_str());
-        host_cache.add(* tpreq->targ->TargetSockAddr(), result);
+  switch (action) {
+    case ACTION_SYSTEM_RESOLVE:
+    case ACTION_FINISHED:
+      if (server->reqs_on_wire == server->capacity && server->capacity < server->ssthresh) {
+        server->capacity += CAPACITY_UP_STEP;
+        check_capacities(server);
       }
-
-      records.erase(infoI);
+      records.erase(tpreq->id);
       server->in_process.remove(tpreq);
       server->reqs_on_wire--;
-
       total_reqs--;
+      if (action == ACTION_SYSTEM_RESOLVE && is_primary_req(tpreq)) {
+        deferred_reqs.push_back(tpreq);
+      }
+      else {
+        delete tpreq;
+        tpreq = NULL;
+      }
 
-      if (action == ACTION_SYSTEM_RESOLVE) deferred_reqs.push_back(tpreq);
-      if (action == ACTION_FINISHED) delete tpreq;
-    }
-    else
-    {
-      memcpy(&tpreq->timeout, nsock_gettimeofday(), sizeof(struct timeval));
-      deal_with_timedout_reads();
-    }
-
-    do_possible_writes();
-
-    // Close DNS servers if we're all done so that we kill
-    // all events and return from nsock_loop immediateley
-    if (total_reqs == 0)
-      close_dns_servers();
-    return 1;
+      break;
+    case ACTION_TIMEOUT:
+      tpreq->tries = MAX_DNS_TRIES;
+      deal_with_timedout_reads(false);
+      break;
+    default:
+      assert(false);
+      break;
   }
-  return 0;
+}
+
+// After processing a DNS response, we search through the IPs we're
+// looking for and update their results as necessary.
+static bool process_result(const std::string &name, const DNS::Record *rr, info &reqinfo, bool already_matched)
+{
+  DNS::Request *reqt = reqinfo.tpreq->targ;
+  std::vector<struct sockaddr_storage> *ssv;
+  if (reqinfo.tpreq->alt_req) {
+    DNS::Request *alt_req = (DNS::Request *) reqinfo.tpreq->targ->userdata;
+    ssv = &alt_req->ssv;
+  }
+  else {
+    ssv = &reqt->ssv;
+  }
+  const struct sockaddr_storage *ss = NULL;
+  const DNS::A_Record *a_rec = NULL;
+  sockaddr_storage ip;
+  ip.ss_family = AF_UNSPEC;
+  switch (reqt->type) {
+    case DNS::A:
+    case DNS::AAAA:
+    case DNS::ANY:
+      if (!already_matched && name != reqt->name) {
+        return false;
+      }
+      a_rec = static_cast<const DNS::A_Record *>(rr);
+      ssv->push_back(a_rec->value);
+      if (o.debugging >= TRACE_DEBUG_LEVEL)
+      {
+        log_write(LOG_STDOUT, "mass_dns: OK MATCHED <%s> to <%s>\n",
+            reqt->name.c_str(),
+            inet_ntop_ez(&a_rec->value, sizeof(struct sockaddr_storage)));
+      }
+      break;
+    case DNS::PTR:
+      ss = &reqt->ssv.front();
+      if (!already_matched) {
+        if (!DNS::Factory::ptrToIp(name, ip) ||
+            !sockaddr_storage_equal(&ip, ss)) {
+          return false;
+        }
+      }
+      reqt->name = static_cast<const DNS::PTR_Record *>(rr)->value;
+      host_cache.add(*ss, reqt->name);
+      if (o.debugging >= TRACE_DEBUG_LEVEL)
+      {
+        log_write(LOG_STDOUT, "mass_dns: OK MATCHED <%s> to <%s>\n",
+            inet_ntop_ez(ss, sizeof(struct sockaddr_storage)),
+            reqt->name.c_str());
+      }
+      break;
+    default:
+      assert(false);
+      break;
+  }
+
+  return true;
 }
 
 // Nsock read handler. One nsock read for each DNS server exists at each
 // time. This function uses various helper functions as defined above.
 static void read_evt_handler(nsock_pool nsp, nsock_event evt, void *) {
-  u8 *buf;
+  const u8 *buf;
   int buflen;
 
   if (total_reqs >= 1)
@@ -739,90 +802,82 @@ static void read_evt_handler(nsock_pool nsp, nsock_event evt, void *) {
      DNS_HAS_ERR(f, DNS::ERR_NOT_IMPLEMENTED) || DNS_HAS_ERR(f, DNS::ERR_REFUSED))
     return;
 
-  if (DNS_HAS_ERR(f, DNS::ERR_NAME))
+  // Check for matching request
+  std::map<u16, info>::iterator infoI = records.find(p.id);
+  if (infoI == records.end()) {
+    return;
+  }
+  info &reqinfo = infoI->second;
+  DNS::Request *reqt = reqinfo.tpreq->targ;
+  bool processing_successful = false;
+
+  if (DNS_HAS_ERR(f, DNS::ERR_NAME) || p.answers.empty())
   {
-    sockaddr_storage discard;
-    if(process_result(discard, "", ACTION_FINISHED, p.id))
-    {
+    // Check if this was a nonstandard name;
+    if (reqt->type != DNS::PTR) {
+      for (std::string::const_iterator it=reqt->name.begin(); it < reqt->name.end(); it++) {
+        if (*it < '0') { // signed char comparison; non-ascii are < 0
+          // system resolver might be able to do better with things like AI_IDN
+          process_request(ACTION_SYSTEM_RESOLVE, reqinfo);
+          processing_successful = true;
+          break;
+        }
+      }
+      if (!processing_successful && reqt->name.find('.') == std::string::npos) {
+        // Names without a dot: system resolver may do better.
+          process_request(ACTION_SYSTEM_RESOLVE, reqinfo);
+          processing_successful = true;
+      }
+    }
+
+    if (!processing_successful) {
+      process_request(ACTION_FINISHED, reqinfo);
       if (o.debugging >= TRACE_DEBUG_LEVEL)
-        log_write(LOG_STDOUT, "mass_rdns: NXDOMAIN <id = %d>\n", p.id);
-      output_summary();
+        log_write(LOG_STDOUT, "mass_dns: NXDOMAIN <id = %d>\n", p.id);
       stat_nx++;
     }
 
+    output_summary();
     return;
   }
 
   if (DNS_HAS_ERR(f, DNS::ERR_SERVFAIL))
   {
-    sockaddr_storage discard;
-    if (process_result(discard, "", ACTION_TIMEOUT, p.id))
-    {
-      if (o.debugging >= TRACE_DEBUG_LEVEL)
-        log_write(LOG_STDOUT, "mass_rdns: SERVFAIL <id = %d>\n", p.id);
-      stat_sf++;
-    }
+    process_request(ACTION_TIMEOUT, reqinfo);
+    if (o.debugging >= TRACE_DEBUG_LEVEL)
+      log_write(LOG_STDOUT, "mass_dns: SERVFAIL <id = %d>\n", p.id);
+    stat_sf++;
 
     return;
   }
-
-  bool processing_successful = false;
 
   sockaddr_storage ip;
   ip.ss_family = AF_UNSPEC;
   std::string alias;
 
   for(std::list<DNS::Answer>::const_iterator it = p.answers.begin();
-      it != p.answers.end() && !processing_successful; ++it )
+      it != p.answers.end(); ++it )
   {
     const DNS::Answer &a = *it;
     if(a.record_class == DNS::CLASS_IN)
     {
-      switch(a.record_type)
-      {
-        case DNS::PTR:
-        {
-          DNS::PTR_Record * ptr = static_cast<DNS::PTR_Record *>(a.record);
-
-          if(
-            // If CNAME answer filled in ip with a matching alias
-            (ip.ss_family != AF_UNSPEC && a.name == alias )
-            // Or if we can get an IP from reversing the .arpa PTR address
-            || DNS::Factory::ptrToIp(a.name, ip))
-          {
-            if ((processing_successful = process_result(ip, ptr->value, ACTION_FINISHED, p.id)))
-            {
-              if (o.debugging >= TRACE_DEBUG_LEVEL)
-              {
-                char ipstr[INET6_ADDRSTRLEN];
-                sockaddr_storage_iptop(&ip, ipstr);
-                log_write(LOG_STDOUT, "mass_rdns: OK MATCHED <%s> to <%s>\n",
-                          ipstr,
-                          ptr->value.c_str());
-              }
-              output_summary();
-              stat_ok++;
-            }
-          }
-          break;
+      if (wire_type(reqt->type) == a.record_type) {
+        processing_successful = process_result(a.name, a.record, reqinfo, a.name == alias);
+        if (!processing_successful && o.debugging) {
+          log_write(LOG_STDOUT, "mass_dns: Mismatched record for request %s\n", reqt->repr());
         }
-        case DNS::CNAME:
+      }
+      else if (a.record_type == DNS::CNAME) {
+        const DNS::CNAME_Record *cname = static_cast<const DNS::CNAME_Record *>(a.record);
+        if((reqt->type == DNS::PTR && DNS::Factory::ptrToIp(a.name, ip))
+          || a.name == reqt->name || (!alias.empty() && a.name == alias))
         {
-          if(DNS::Factory::ptrToIp(a.name, ip))
+          alias = cname->value;
+          if (o.debugging >= TRACE_DEBUG_LEVEL)
           {
-            DNS::CNAME_Record * cname = static_cast<DNS::CNAME_Record *>(a.record);
-            alias = cname->value;
-            if (o.debugging >= TRACE_DEBUG_LEVEL)
-            {
-              char ipstr[INET6_ADDRSTRLEN];
-              sockaddr_storage_iptop(&ip, ipstr);
-              log_write(LOG_STDOUT, "mass_rdns: CNAME found for <%s> to <%s>\n", ipstr, alias.c_str());
-            }
+            log_write(LOG_STDOUT, "mass_dns: CNAME found for <%s> to <%s>\n", a.name.c_str(), alias.c_str());
           }
-          break;
         }
-        default:
-          break;
       }
     }
   }
@@ -830,38 +885,86 @@ static void read_evt_handler(nsock_pool nsp, nsock_event evt, void *) {
   if (!processing_successful) {
     if (DNS_HAS_FLAG(f, DNS::TRUNCATED)) {
       // TODO: TCP fallback, or only use system resolver if user didn't specify --dns-servers
-      process_result(ip, "", ACTION_SYSTEM_RESOLVE, p.id);
+      process_request(ACTION_SYSTEM_RESOLVE, reqinfo);
     }
     else if (!alias.empty()) {
       if (o.debugging >= TRACE_DEBUG_LEVEL)
       {
-        char ipstr[INET6_ADDRSTRLEN];
-        sockaddr_storage_iptop(&ip, ipstr);
-        log_write(LOG_STDOUT, "mass_rdns: CNAME for <%s> not processed.\n", ipstr);
+        log_write(LOG_STDOUT, "mass_dns: CNAME for <%s> not processed.\n", reqt->repr());
       }
       // TODO: Send a PTR request for alias instead. Meanwhile, we'll just fall
       // back to using system resolver. Alternative: report the canonical name
       // (alias), but that's not very useful.
-      process_result(ip, "", ACTION_SYSTEM_RESOLVE, p.id);
+      process_request(ACTION_SYSTEM_RESOLVE, reqinfo);
     }
     else {
       if (o.debugging >= TRACE_DEBUG_LEVEL) {
-        log_write(LOG_STDOUT, "mass_rdns: Unable to process the response\n");
+        log_write(LOG_STDOUT, "mass_dns: Unable to process the response for %s\n", reqt->repr());
       }
     }
   }
+  else {
+    output_summary();
+    stat_ok++;
+    process_request(ACTION_FINISHED, reqinfo);
+  }
+  do_possible_writes();
+
+  // Close DNS servers if we're all done so that we kill
+  // all events and return from nsock_loop immediateley
+  if (total_reqs == 0)
+    close_dns_servers();
 }
 
 
 // nsock connect handler - Empty because it doesn't really need to do anything...
-static void connect_evt_handler(nsock_pool, nsock_event, void *) {}
+static void connect_evt_handler(nsock_pool nsp, nsock_event evt, void *srv_v) {
+  dns_server *srv = (dns_server *)srv_v;
+  assert(nse_type(evt) == NSE_TYPE_CONNECT);
+  if (nse_status(evt) != NSE_STATUS_SUCCESS) {
+    if (o.debugging) {
+      log_write(LOG_STDOUT, "mass_dns: connection to %s failed: %s\n",
+          srv->hostname.c_str(),
+          nse_status2str(nse_status(evt)));
+    }
+    srv->status = dns_server::DISCONNECTED;
+    return;
+  }
+  nsock_read(nsp, srv->nsd, read_evt_handler, -1, NULL);
+  srv->status = dns_server::CONNECTED;
+}
 
+static void add_dns_server(const struct sockaddr_storage *addr, size_t addr_len, const char *hostname) {
+  const sockaddr_storage *ss = o.SourceSockAddr();
+  if (o.spoofsource && ss && ss->ss_family != addr->ss_family) {
+    // Can't connect to this address family using the specified source (-S)
+    return;
+  }
+
+  std::list<dns_server>::iterator servI;
+  for(servI = servs.begin(); servI != servs.end(); servI++) {
+    // Already added!
+    if (memcmp(addr, &servI->addr, addr_len) == 0) break;
+  }
+
+  // If it hasn't already been added, add it!
+  if (servI == servs.end()) {
+    dns_server tpserv;
+
+    tpserv.hostname = hostname;
+    memcpy(&tpserv.addr, addr, addr_len);
+    tpserv.addr_len = addr_len;
+
+    servs.push_front(tpserv);
+
+    if (o.debugging) log_write(LOG_STDOUT, "mass_dns: Using DNS server %s\n", hostname);
+  }
+}
 
 // Adds DNS servers to the dns_server list. They can be separated by
 // commas or spaces - NOTE this doesn't actually do any connecting!
 static void add_dns_server(char *ipaddrs) {
-  std::list<dns_server>::iterator servI;
-  char *hostname;
+  const char *hostname;
   struct sockaddr_storage addr;
   size_t addr_len = sizeof(addr);
 
@@ -871,24 +974,7 @@ static void add_dns_server(char *ipaddrs) {
       o.spoofsource ? o.af() : PF_UNSPEC) != 0)
       continue;
 
-    for(servI = servs.begin(); servI != servs.end(); servI++) {
-      // Already added!
-      if (memcmp(&addr, &servI->addr, sizeof(addr)) == 0) break;
-    }
-
-    // If it hasn't already been added, add it!
-    if (servI == servs.end()) {
-      dns_server tpserv;
-
-      tpserv.hostname = hostname;
-      memcpy(&tpserv.addr, &addr, sizeof(addr));
-      tpserv.addr_len = addr_len;
-
-      servs.push_front(tpserv);
-
-      if (o.debugging) log_write(LOG_STDOUT, "mass_rdns: Using DNS server %s\n", hostname);
-    }
-
+    add_dns_server(&addr, addr_len, hostname);
   }
 
 }
@@ -896,113 +982,99 @@ static void add_dns_server(char *ipaddrs) {
 // Creates a new nsi for each DNS server
 static void connect_dns_servers() {
   std::list<dns_server>::iterator serverI;
+  struct sockaddr_storage ss, ss2;
+  size_t sslen = 0, ss2len = 0;
+  if (o.SourceSockAddr()) {
+    o.SourceSockAddr(&ss, &sslen);
+    // Source addr can be set by -e, so unless user specifically asked to
+    // spoof, also grab the source for the other address family.
+    if (!o.spoofsource && *o.device) {
+      int af = ss.ss_family == AF_INET ? AF_INET6 : AF_INET;
+      if (-1 != devname2ipaddr(o.device, af, &ss2)) {
+        ss2len = sizeof(ss2);
+      }
+    }
+  }
   for(serverI = servs.begin(); serverI != servs.end(); serverI++) {
     serverI->nsd = nsock_iod_new(dnspool, NULL);
-    if (o.spoofsource) {
-      struct sockaddr_storage ss;
-      size_t sslen;
-      o.SourceSockAddr(&ss, &sslen);
+    if (sslen > 0 && ss.ss_family == serverI->addr.ss_family) {
       nsock_iod_set_localaddr(serverI->nsd, &ss, sslen);
+    }
+    else if (ss2len > 0 && ss2.ss_family == serverI->addr.ss_family) {
+      nsock_iod_set_localaddr(serverI->nsd, &ss2, ss2len);
     }
     if (o.ipoptionslen)
       nsock_iod_set_ipoptions(serverI->nsd, o.ipoptions, o.ipoptionslen);
-    serverI->reqs_on_wire = 0;
-    serverI->capacity = CAPACITY_MIN;
-    serverI->write_busy = 0;
 
-    nsock_connect_udp(dnspool, serverI->nsd, connect_evt_handler, NULL, (struct sockaddr *) &serverI->addr, serverI->addr_len, 53);
-    nsock_read(dnspool, serverI->nsd, read_evt_handler, -1, NULL);
-    serverI->connected = 1;
+    serverI->status = dns_server::CONNECTING;
+    nsock_connect_udp(dnspool, serverI->nsd, connect_evt_handler, &*serverI, (struct sockaddr *) &serverI->addr, serverI->addr_len, 53);
   }
 
 }
 
 
 #ifdef WIN32
-static bool interface_is_known_by_guid(const char *guid) {
-  struct interface_info *iflist;
-  int i, n;
-
-  iflist = getinterfaces(&n, NULL, 0);
-  if (iflist == NULL)
-    return false;
-
-  for (i = 0; i < n; i++) {
-    char pcap_name[1024];
-    char *pcap_guid;
-
-    if (!DnetName2PcapName(iflist[i].devname, pcap_name, sizeof(pcap_name)))
-      continue;
-    pcap_guid = strchr(pcap_name, '{');
-    if (pcap_guid == NULL)
-      continue;
-    if (strcasecmp(guid, pcap_guid) == 0)
-      return true;
+void win32_get_servers() {
+  ULONG ret = ERROR_SUCCESS;
+  std::vector<IP_ADAPTER_ADDRESSES> advec;
+  ULONG len = 0;
+  for (int i=0; i < 3; i++) {
+    if (len == 0) {
+      advec.resize(8);
+    }
+    else {
+      size_t count = len / sizeof(IP_ADAPTER_ADDRESSES);
+      advec.resize(count);
+    }
+    len = advec.size() * sizeof(IP_ADAPTER_ADDRESSES);
+    ret = GetAdaptersAddresses(AF_UNSPEC, (
+          GAA_FLAG_SKIP_UNICAST |
+          GAA_FLAG_SKIP_ANYCAST |
+          GAA_FLAG_SKIP_MULTICAST |
+          GAA_FLAG_SKIP_FRIENDLY_NAME),
+        NULL, &advec[0], &len);
+    if (ret != ERROR_BUFFER_OVERFLOW) {
+      break;
+    }
   }
-
-  return false;
-}
-
-// Reads the Windows registry and adds all the nameservers found via the
-// add_dns_server() function.
-void win32_read_registry() {
-  HKEY hKey;
-  HKEY hKey2;
-  char keybasebuf[2048];
-  char buf[2048], keyname[2048], *p;
-  DWORD sz, i;
-
-  Snprintf(keybasebuf, sizeof(keybasebuf), "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters");
-  if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, keybasebuf,
-                    0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-    if (firstrun) error("mass_dns: warning: Error opening registry to read DNS servers. Try using --system-dns or specify valid servers with --dns-servers");
+  if (ret != ERROR_SUCCESS) {
+    error("Unable to get DNS servers: %08x", ret);
     return;
   }
 
-  sz = sizeof(buf);
-  if (RegQueryValueEx(hKey, "NameServer", NULL, NULL, (LPBYTE) buf, (LPDWORD) &sz) == ERROR_SUCCESS)
-    add_dns_server(buf);
-
-  sz = sizeof(buf);
-  if (RegQueryValueEx(hKey, "DhcpNameServer", NULL, NULL, (LPBYTE) buf, (LPDWORD) &sz) == ERROR_SUCCESS)
-    add_dns_server(buf);
-
-  RegCloseKey(hKey);
-
-  Snprintf(keybasebuf, sizeof(keybasebuf), "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces");
-  if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, keybasebuf,
-                    0, KEY_ENUMERATE_SUB_KEYS, &hKey) == ERROR_SUCCESS) {
-
-    for (i=0; sz = sizeof(buf), RegEnumKeyEx(hKey, i, buf, &sz, NULL, NULL, NULL, NULL) != ERROR_NO_MORE_ITEMS; i++) {
-
-      // If we don't have pcap, interface_is_known_by_guid will crash. Just use any servers we can find.
-      if (o.have_pcap && !interface_is_known_by_guid(buf)) {
-        if (o.debugging > 1)
-          log_write(LOG_PLAIN, "Interface %s is not known; ignoring its nameservers.\n", buf);
-        continue;
-      }
-
-      Snprintf(keyname, sizeof(keyname), "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\%s", buf);
-
-      if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, keyname,
-                        0, KEY_READ, &hKey2) == ERROR_SUCCESS) {
-
-        sz = sizeof(buf);
-        if (RegQueryValueEx(hKey2, "DhcpNameServer", NULL, NULL, (LPBYTE) buf, (LPDWORD) &sz) == ERROR_SUCCESS)
-          add_dns_server(buf);
-
-        sz = sizeof(buf);
-        if (RegQueryValueEx(hKey2, "NameServer", NULL, NULL, (LPBYTE) buf, (LPDWORD) &sz) == ERROR_SUCCESS)
-          add_dns_server(buf);
-
-        RegCloseKey(hKey2);
-      }
-    }
-
-    RegCloseKey(hKey);
-
+  char pcap_name[1024];
+  const char *pcap_guid = NULL;
+  if (*o.device && DnetName2PcapName(o.device, pcap_name, sizeof(pcap_name))) {
+    // pcap_guid is the AdapterName for the requested adapter.
+    pcap_guid = strchr(pcap_name, '{');
   }
-
+  for (IP_ADAPTER_ADDRESSES *a = &advec[0]; a != NULL; a = a->Next) {
+    if (a->OperStatus != IfOperStatusUp)
+      continue;
+    // If user requested an interface with -e,
+    // don't use DNS servers configured on other interfaces.
+    if (pcap_guid && 0 != strcasecmp(a->AdapterName, pcap_guid))
+      continue;
+    for (IP_ADAPTER_DNS_SERVER_ADDRESS_XP *d = a->FirstDnsServerAddress;
+        d != NULL; d = d->Next) {
+        const sockaddr_storage* ss = (sockaddr_storage*)d->Address.lpSockaddr;
+        size_t sslen = d->Address.iSockaddrLength;
+        if (ss->ss_family == AF_INET) {
+          if (!a->Ipv4Enabled) continue;
+        }
+        else if (ss->ss_family == AF_INET6) {
+          if (!a->Ipv6Enabled) continue;
+          /* Windows default site-local IPv6 DNS servers */
+          if (0 == memcmp(&((sockaddr_in6*)ss)->sin6_addr,
+              "\xfe\xc0\x00\x00\x00\x00\xff\xff", 8))
+              continue;
+        }
+        else {
+          continue;
+        }
+        add_dns_server(ss, sslen, inet_ntop_ez(ss, sslen));
+    }
+  }
 }
 #endif // WIN32
 
@@ -1018,7 +1090,7 @@ static void parse_resolvdotconf() {
 
   fp = fopen("/etc/resolv.conf", "r");
   if (fp == NULL) {
-    if (firstrun) error("mass_dns: warning: Unable to open /etc/resolv.conf. Try using --system-dns or specify valid servers with --dns-servers");
+    if (firstrun) gh_perror("mass_dns: warning: Unable to open /etc/resolv.conf. Try using --system-dns or specify valid servers with --dns-servers");
     return;
   }
 
@@ -1043,35 +1115,64 @@ static void parse_resolvdotconf() {
 
 
 static void parse_etchosts(const char *fname) {
-  FILE *fp;
-  char buf[2048], hname[256], ipaddrstr[INET6_ADDRSTRLEN+1], *tp;
+  std::ifstream ifs(fname);
+  std::string line;
   sockaddr_storage ia;
+  size_t ialen;
 
-  fp = fopen(fname, "r");
-  if (fp == NULL) return; // silently is OK
-
-  while (fgets(buf, sizeof(buf), fp)) {
-    tp = buf;
-
-    // Clip off comments #, \r, \n
-    while (*tp != '\r' && *tp != '\n' && *tp != '#' && *tp) tp++;
-    *tp = '\0';
-
-    tp = buf;
-    // Skip any leading whitespace
-    while (*tp == ' ' || *tp == '\t') tp++;
-
-    std::stringstream pattern;
-    pattern << "%" << INET6_ADDRSTRLEN << "s %255s";
-    if (sscanf(tp, pattern.str().c_str(), ipaddrstr, hname) == 2)
-      if (sockaddr_storage_inet_pton(ipaddrstr, &ia))
-      {
-        const std::string hname_ = hname;
-        host_cache.add(ia, hname_);
-      }
+  // First, load localhost names
+  line = "localhost";
+  if (0 == resolve_numeric("::1", 0, &ia, &ialen, AF_INET6)) {
+    host_cache.add(ia, line);
+    etchosts[NameRecord(line, DNS::AAAA)] = ia;
+  }
+  if (0 == resolve_numeric("127.0.0.1", 0, &ia, &ialen, AF_INET)) {
+    host_cache.add(ia, line);
+    etchosts[NameRecord(line, DNS::A)] = ia;
   }
 
-  fclose(fp);
+  if (ifs.fail()) return; // silently is OK
+
+  while (std::getline(ifs, line)) {
+    std::istringstream iss(line);
+
+      std::string addr, hname;
+      if (!(iss >> addr >> hname)) {
+        // We need more than 1 token per line
+        continue;
+      }
+
+      // If hostname is a comment or address begins a comment, no good.
+      if (hname[0] == '#' || addr.find('#') != std::string::npos) {
+        continue;
+      }
+
+      if (0 == resolve_numeric(addr.c_str(), 0, &ia, &ialen, AF_UNSPEC)) {
+        size_t commentpos = std::string::npos;
+        bool first = true;
+        do {
+          // If there's a comment in the hostname, strip it.
+          commentpos = hname.find('#');
+          if (commentpos != std::string::npos) {
+            hname.erase(commentpos);
+          }
+          if (!hname.empty()) {
+            if (first)
+              host_cache.add(ia, hname);
+            if (ia.ss_family == AF_INET) {
+              etchosts[NameRecord(hname, DNS::A)] = ia;
+            }
+            else if (ia.ss_family == AF_INET6) {
+              etchosts[NameRecord(hname, DNS::AAAA)] = ia;
+            }
+          }
+          first = false;
+          // Keep going until we find a comment or run out of tokens
+        } while (commentpos == std::string::npos && (iss >> hname));
+      }
+      else if (o.debugging)
+        log_write(LOG_STDOUT, "Unable to parse /etc/hosts address: %s\n", addr.c_str());
+  }
 }
 
 static void etchosts_init(void) {
@@ -1089,10 +1190,6 @@ static void etchosts_init(void) {
 
   // If it has a backslash it's C:\, otherwise something like C:\WINNT
   has_backslash = (windows_dir[strlen(windows_dir)-1] == '\\');
-
-  // Windows 95/98/Me:
-  Snprintf(tpbuf, sizeof(tpbuf), "%s%shosts", windows_dir, has_backslash ? "" : "\\");
-  parse_etchosts(tpbuf);
 
   // Windows NT/2000/XP/2K3:
   Snprintf(tpbuf, sizeof(tpbuf), "%s%ssystem32\\drivers\\etc\\hosts", windows_dir, has_backslash ? "" : "\\");
@@ -1124,33 +1221,77 @@ static void init_servs(void) {
 #ifndef WIN32
     parse_resolvdotconf();
 #else
-    win32_read_registry();
+    win32_get_servers();
 #endif
   }
+}
+
+static bool system_resolve(DNS::Request &reqt)
+{
+  char hostname[FQDN_LEN + 1] = "";
+  int af = AF_INET;
+  struct addrinfo *ai_result = NULL, *ai = NULL;
+
+  if (reqt.type == DNS::PTR) {
+    assert(reqt.ssv.size() > 0);
+    if (getnameinfo((const struct sockaddr *) &reqt.ssv.front(),
+          sizeof(sockaddr_storage), hostname,
+          sizeof(hostname), NULL, 0, NI_NAMEREQD) == 0) {
+      reqt.name = hostname;
+    }
+  }
+  else {
+    switch (reqt.type) {
+      case DNS::A:
+        af = AF_INET;
+        break;
+      case DNS::AAAA:
+        af = AF_INET6;
+        break;
+      case DNS::ANY:
+        af = AF_UNSPEC;
+        break;
+      default:
+        error("System DNS resolution of %s could not be performed.\n", reqt.repr());
+        return false;
+        break;
+    }
+    ai_result = resolve_all(reqt.name.c_str(), af);
+    for (ai = ai_result; ai != NULL; ai = ai->ai_next) {
+      if (ai->ai_addrlen <= sizeof(struct sockaddr_storage)) {
+        reqt.ssv.push_back(*(struct sockaddr_storage *)ai->ai_addr);
+      }
+    }
+    if (ai_result != NULL)
+      freeaddrinfo(ai_result);
+    else
+      return false;
+  }
+  return true;
 }
 
 //------------------- Main loops ---------------------
 
 
 // Actual main loop
-static void nmap_mass_rdns_core(Target **targets, int num_targets) {
+static void nmap_mass_dns_core(DNS::Request *requests, int num_requests) {
 
-  Target **hostI;
   std::list<request *>::iterator reqI;
   request *tpreq;
-  int timeout;
-  const char *tpname;
+  int timeout = 0;
   int i;
   char spmobuf[1024];
 
   // If necessary, set up the dns server list
   init_servs();
 
-  if (servs.size() == 0 && firstrun) error("mass_dns: warning: Unable to "
-                                           "determine any DNS servers. Reverse"
-                                           " DNS is disabled. Try using "
-                                           "--system-dns or specify valid "
-                                           "servers with --dns-servers");
+  if (servs.size() == 0) {
+    if (firstrun)
+      error("mass_dns: warning: Unable to determine any DNS servers. "
+          "Reverse DNS is disabled. Try using --system-dns or "
+          "specify valid servers with --dns-servers");
+    return;
+  }
 
 
   // If necessary, read /etc/hosts and put entries into the hashtable
@@ -1160,98 +1301,148 @@ static void nmap_mass_rdns_core(Target **targets, int num_targets) {
   total_reqs = 0;
 
   // Set up the request structure
-  for(hostI = targets; hostI < targets+num_targets; hostI++)
+  for (int i=0; i < num_requests; i++)
   {
-    if (!((*hostI)->flags & HOST_UP) && !o.always_resolve) continue;
+    DNS::Request &reqt = requests[i];
 
     // See if it's cached
-    std::string res;
-    if (host_cache.lookup(*(*hostI)->TargetSockAddr(), res)) {
-      tpname = res.c_str();
-      (*hostI)->setHostName(tpname);
-      continue;
+    std::map<NameRecord, sockaddr_storage>::const_iterator it;
+    switch (reqt.type) {
+      case DNS::PTR:
+        assert(reqt.ssv.size() > 0);
+        if (host_cache.lookup(reqt.ssv.front(), reqt.name)) {
+          continue;
+        }
+        break;
+      case DNS::ANY:
+        it = etchosts.find(NameRecord(reqt.name, DNS::A));
+        if (it != etchosts.end()) {
+          reqt.ssv.push_back(it->second);
+        }
+        it = etchosts.find(NameRecord(reqt.name, DNS::AAAA));
+        if (it != etchosts.end()) {
+          reqt.ssv.push_back(it->second);
+        }
+        if (reqt.ssv.size() > 0) {
+          continue;
+        }
+        break;
+      case DNS::A:
+      case DNS::AAAA:
+        it = etchosts.find(NameRecord(reqt.name, reqt.type));
+        if (it != etchosts.end()) {
+          reqt.ssv.push_back(it->second);
+          continue;
+        }
+        break;
+      case DNS::NONE:
+        // This is okay, just don't make a request.
+        continue;
+        break;
+      default:
+        error("%s: Unknown DNS request type %s\n", __func__, reqt.repr());
+        continue;
+        break;
     }
 
     tpreq = new request;
-    tpreq->targ = *hostI;
+    tpreq->targ = &reqt;
     tpreq->tries = 0;
     tpreq->servers_tried = 0;
+    tpreq->alt_req = false;
+    tpreq->id = DNS::Factory::progressiveId++;
 
     new_reqs.push_back(tpreq);
 
+    if (reqt.type == DNS::ANY) {
+      DNS::Request *req_aaaa = new DNS::Request;
+      req_aaaa->type = DNS::AAAA;
+      req_aaaa->name = reqt.name;
+      req_aaaa->userdata = &reqt;
+      request *tpreq_alt = new request;
+      *tpreq_alt = *tpreq;
+      tpreq_alt->targ = req_aaaa;
+      tpreq_alt->alt_req = true;
+      tpreq_alt->id = DNS::Factory::progressiveId++;
+      new_reqs.push_back(tpreq_alt);
+    }
+
     stat_actual++;
-    total_reqs++;
   }
 
-  if (total_reqs == 0 || servs.size() == 0) return;
+  total_reqs = new_reqs.size();
+  if (total_reqs > 0) {
 
-  // And finally, do it!
+    // And finally, do it!
 
-  if ((dnspool = nsock_pool_new(NULL)) == NULL)
-    fatal("Unable to create nsock pool in %s()", __func__);
+    if ((dnspool = nsock_pool_new(NULL)) == NULL)
+      fatal("Unable to create nsock pool in %s()", __func__);
 
-  nsock_set_log_function(nmap_nsock_stderr_logger);
-  nmap_adjust_loglevel(o.packetTrace());
-
-  nsock_pool_set_device(dnspool, o.device);
-
-  if (o.proxy_chain)
-    nsock_pool_set_proxychain(dnspool, o.proxy_chain);
-
-  connect_dns_servers();
-
-  deferred_reqs.clear();
-
-  read_timeout_index = MIN(sizeof(read_timeouts)/sizeof(read_timeouts[0]), servs.size()) - 1;
-
-  Snprintf(spmobuf, sizeof(spmobuf), "Parallel DNS resolution of %d host%s.", num_targets, num_targets-1 ? "s" : "");
-  SPM = new ScanProgressMeter(spmobuf);
-
-  while (total_reqs > 0) {
-    timeout = deal_with_timedout_reads();
-
-    do_possible_writes();
-
-    if (total_reqs <= 0) break;
-
-    /* Because this can change with runtime interaction */
+    nmap_set_nsock_logger();
     nmap_adjust_loglevel(o.packetTrace());
 
-    nsock_loop(dnspool, timeout);
+    if (*o.device)
+      nsock_pool_set_device(dnspool, o.device);
+
+    if (o.proxy_chain)
+      nsock_pool_set_proxychain(dnspool, o.proxy_chain);
+
+    connect_dns_servers();
+
+    deferred_reqs.clear();
+
+    read_timeout_index = MIN(sizeof(read_timeouts)/sizeof(read_timeouts[0]), servs.size()) - 1;
+
+    Snprintf(spmobuf, sizeof(spmobuf), "Parallel DNS resolution of %d host%s.", stat_actual, stat_actual-1 ? "s" : "");
+    SPM = new ScanProgressMeter(spmobuf);
+    stat_actual = total_reqs;
+
+    int since_last = 0;
+    nsock_loopstatus status = nsock_loop(dnspool, 0);
+    while (status == NSOCK_LOOP_TIMEOUT && total_reqs > 0) {
+      since_last += timeout;
+      if (since_last > MIN_DNS_TIMEOUT) {
+        since_last = 0;
+        timeout = deal_with_timedout_reads(true);
+      }
+      else {
+        timeout = deal_with_timedout_reads(false);
+      }
+
+      do_possible_writes();
+
+      if (total_reqs <= 0) break;
+
+      /* Because this can change with runtime interaction */
+      nmap_adjust_loglevel(o.packetTrace());
+
+      nsock_loop(dnspool, timeout);
+    }
+
+    SPM->endTask(NULL, NULL);
+    delete SPM;
+
+    close_dns_servers();
+
+    nsock_pool_delete(dnspool);
   }
 
-  SPM->endTask(NULL, NULL);
-  delete SPM;
-
-  close_dns_servers();
-
-  nsock_pool_delete(dnspool);
-
-  if (deferred_reqs.size() && o.debugging)
-    log_write(LOG_STDOUT, "Performing system-dns for %d domain names that were deferred\n", (int) deferred_reqs.size());
-
   if (deferred_reqs.size()) {
+    if (o.debugging)
+      log_write(LOG_STDOUT, "Performing system-dns for %d domain names that were deferred\n", (int) deferred_reqs.size());
+
     Snprintf(spmobuf, sizeof(spmobuf), "System DNS resolution of %u host%s.", (unsigned) deferred_reqs.size(), deferred_reqs.size()-1 ? "s" : "");
     SPM = new ScanProgressMeter(spmobuf);
 
     for(i=0, reqI = deferred_reqs.begin(); reqI != deferred_reqs.end(); reqI++, i++) {
-      struct sockaddr_storage ss;
-      size_t sslen;
-      char hostname[FQDN_LEN + 1] = "";
 
       if (keyWasPressed())
         SPM->printStats((double) i / deferred_reqs.size(), NULL);
 
       tpreq = *reqI;
-
-      if (tpreq->targ->TargetSockAddr(&ss, &sslen) != 0)
-        fatal("Failed to get target socket address.");
-
-      if (getnameinfo((struct sockaddr *)&ss, sslen, hostname,
-                      sizeof(hostname), NULL, 0, NI_NAMEREQD) == 0) {
+      if (system_resolve(*tpreq->targ)) {
         stat_ok++;
         stat_cname++;
-        tpreq->targ->setHostName(hostname);
       }
 
       delete tpreq;
@@ -1266,38 +1457,27 @@ static void nmap_mass_rdns_core(Target **targets, int num_targets) {
 
 }
 
-static void nmap_system_rdns_core(Target **targets, int num_targets) {
-  Target **hostI;
-  Target *currenths;
-  struct sockaddr_storage ss;
-  size_t sslen;
-  char hostname[FQDN_LEN + 1] = "";
+static void nmap_system_dns_core(DNS::Request requests[], int num_requests) {
   char spmobuf[1024];
-  int i;
 
-  for(hostI = targets; hostI < targets+num_targets; hostI++) {
-    currenths = *hostI;
-
-    if (((currenths->flags & HOST_UP) || o.always_resolve) && !o.noresolve) stat_actual++;
+  stat_actual = 0;
+  for (int i=0; i < num_requests; i++) {
+    if (requests[i].type != DNS::NONE) {
+      stat_actual++;
+    }
   }
 
-  Snprintf(spmobuf, sizeof(spmobuf), "System DNS resolution of %d host%s.", num_targets, num_targets-1 ? "s" : "");
+  Snprintf(spmobuf, sizeof(spmobuf), "System DNS resolution of %d host%s.", stat_actual, stat_actual-1 ? "s" : "");
   SPM = new ScanProgressMeter(spmobuf);
 
-  for(i=0, hostI = targets; hostI < targets+num_targets; hostI++, i++) {
-    currenths = *hostI;
-
+  for (int i=0; i < num_requests; i++)
+  {
     if (keyWasPressed())
-      SPM->printStats((double) i / stat_actual, NULL);
+      SPM->printStats((double) i / num_requests, NULL);
 
-    if (((currenths->flags & HOST_UP) || o.always_resolve) && !o.noresolve) {
-      if (currenths->TargetSockAddr(&ss, &sslen) != 0)
-        fatal("Failed to get target socket address.");
-      if (getnameinfo((struct sockaddr *)&ss, sslen, hostname,
-                      sizeof(hostname), NULL, 0, NI_NAMEREQD) == 0) {
-        stat_ok++;
-        currenths->setHostName(hostname);
-      }
+    DNS::Request &r = requests[i];
+    if (r.type != DNS::NONE && system_resolve(r)) {
+      stat_ok++;
     }
   }
 
@@ -1308,7 +1488,7 @@ static void nmap_system_rdns_core(Target **targets, int num_targets) {
 
 // Publicly available function. Basically just a wrapper so we
 // can record time information, restart statistics, etc.
-void nmap_mass_rdns(Target **targets, int num_targets) {
+void nmap_mass_dns(DNS::Request requests[], int num_requests) {
 
   struct timeval now;
 
@@ -1317,9 +1497,9 @@ void nmap_mass_rdns(Target **targets, int num_targets) {
   stat_actual = stat_ok = stat_nx = stat_sf = stat_trans = stat_dropped = stat_cname = 0;
 
   if (o.mass_dns)
-    nmap_mass_rdns_core(targets, num_targets);
+    nmap_mass_dns_core(requests, num_requests);
   else
-    nmap_system_rdns_core(targets, num_targets);
+    nmap_system_dns_core(requests, num_requests);
 
   gettimeofday(&now, NULL);
 
@@ -1333,11 +1513,11 @@ void nmap_mass_rdns(Target **targets, int num_targets) {
         // SF: Number of IPs that got 'Server Failure's
         // TR: Total number of transmissions necessary. The number of domains is ideal, higher is worse
         log_write(LOG_STDOUT, "DNS resolution of %d IPs took %.2fs. Mode: Async [#: %lu, OK: %d, NX: %d, DR: %d, SF: %d, TR: %d, CN: %d]\n",
-                  stat_actual, TIMEVAL_MSEC_SUBTRACT(now, starttv) / 1000.0,
+                  stat_actual, TIMEVAL_FSEC_SUBTRACT(now, starttv),
                   (unsigned long) servs.size(), stat_ok, stat_nx, stat_dropped, stat_sf, stat_trans, stat_cname);
       } else {
         log_write(LOG_STDOUT, "DNS resolution of %d IPs took %.2fs. Mode: System [OK: %d, ??: %d]\n",
-                  stat_actual, TIMEVAL_MSEC_SUBTRACT(now, starttv) / 1000.0,
+                  stat_actual, TIMEVAL_FSEC_SUBTRACT(now, starttv),
                   stat_ok, stat_actual - stat_ok);
       }
     }
@@ -1346,6 +1526,28 @@ void nmap_mass_rdns(Target **targets, int num_targets) {
   firstrun=0;
 }
 
+
+void nmap_mass_rdns(Target ** targets, int num_targets) {
+  /* Second, make an array of pointer to DNS::Request to suit the interface of
+     nmap_mass_rdns. */
+  DNS::Request *requests = new DNS::Request[num_targets];
+  for (int i = 0; i < num_targets; i++) {
+    Target *target = targets[i];
+    if (!(target->flags & HOST_UP) && !o.always_resolve) continue;
+
+    DNS::Request &reqt = requests[i];
+    reqt.ssv.push_back(*target->TargetSockAddr());
+    reqt.type = DNS::PTR;
+  }
+  nmap_mass_dns(requests, num_targets);
+  for (int i = 0; i < num_targets; i++) {
+    std::string &name = requests[i].name;
+    if (!name.empty()) {
+      targets[i]->setHostName(name.c_str());
+    }
+  }
+  delete[] requests;
+}
 
 // Returns a list of known DNS servers
 std::list<std::string> get_dns_servers() {
@@ -1365,27 +1567,17 @@ std::list<std::string> get_dns_servers() {
 
 bool DNS::Factory::ipToPtr(const sockaddr_storage &ip, std::string &ptr)
 {
+  static const size_t maxlen = sizeof("0.0.1.1.2.2.3.3.4.4.5.5.6.6.7.7.8.8.9.9.a.a.b.b.c.c.d.d.e.e.f.f.ip6.arpa");
+  ptr.reserve(maxlen);
+  char tmp[INET_ADDRSTRLEN];
   switch (ip.ss_family) {
     case AF_INET:
     {
-      ptr.clear();
-      char ipv4_c[INET_ADDRSTRLEN];
-      if(!sockaddr_storage_iptop(&ip, ipv4_c)) return false;
-
-      std::string ipv4 = ipv4_c;
-      std::string octet;
-      std::string::const_reverse_iterator crend = ipv4.rend();
-      for (std::string::const_reverse_iterator c=ipv4.rbegin(); c != crend; ++c)
-        if((*c)=='.')
-        {
-          ptr += octet + ".";
-          octet.clear();
-        }
-        else
-          octet = (*c) + octet;
-
-      ptr += octet + IPV4_PTR_DOMAIN;
-
+      const u32 ipv4_addr = ((const sockaddr_in *) &ip)->sin_addr.s_addr;
+      const u8 *ipv4_c = (const u8 *)&ipv4_addr;
+      sprintf(tmp, "%d.%d.%d.%d", ipv4_c[3], ipv4_c[2], ipv4_c[1], ipv4_c[0]);
+      ptr = tmp;
+      ptr += IPV4_PTR_DOMAIN;
       break;
     }
     case AF_INET6:
@@ -1395,7 +1587,6 @@ bool DNS::Factory::ipToPtr(const sockaddr_storage &ip, std::string &ptr)
       const u8 * ipv6 = s6.sin6_addr.s6_addr;
       for (short i=15; i>=0; --i)
       {
-        char tmp[3];
         sprintf(tmp, "%02x", ipv6[i]);
         ptr += '.';
         ptr += tmp[1];
@@ -1414,59 +1605,102 @@ bool DNS::Factory::ipToPtr(const sockaddr_storage &ip, std::string &ptr)
 
 bool DNS::Factory::ptrToIp(const std::string &ptr, sockaddr_storage &ip)
 {
-  std::string ip_str;
+  const char *cptr = ptr.c_str();
+  const char *p = NULL;
 
-  size_t pos = ptr.rfind(IPV6_PTR_DOMAIN);
-  if(pos != std::string::npos)
+  memset(&ip, 0, sizeof(sockaddr_storage));
+
+  // Check whether the name ends with the IPv4 PTR domain
+  if (NULL != (p = strcasestr(cptr + ptr.length() + 1 - sizeof(C_IPV4_PTR_DOMAIN), C_IPV4_PTR_DOMAIN)))
   {
-    u8 counter = 0;
-    for (std::string::const_reverse_iterator it = ptr.rend()-pos; it != ptr.rend(); ++it)
+    struct sockaddr_in *ip4 = (struct sockaddr_in *)&ip;
+    static const u8 place_value[] = {1, 10, 100};
+    u8 *v = (u8 *) &(ip4->sin_addr.s_addr);
+    size_t place = 0;
+    size_t i = 0;
+
+    p--;
+    while (p >= cptr && i < sizeof(ip4->sin_addr.s_addr))
     {
-      const char &c = *it;
-      if(c != '.')
+      if (*p == '.')
       {
-        ip_str += c;
-        if(++counter==4) counter=0, ip_str+=':';
+        place = 0;
+        p--;
+        i++;
       }
+      if (p < cptr)
+      {
+        break;
+      }
+      u8 n = *p;
+      if (n >= '0' && n <= '9') { // 0-9
+        n -= 0x30;
+      }
+      else { // invalid
+        return false;
+      }
+      v[i] += n * place_value[place];
+      place++;
+      p--;
     }
-
-    std::string::iterator it = ip_str.end()-1;
-    if( *it == ':') ip_str.erase(it);
+    ip.ss_family = AF_INET;
   }
-
-  std::string mptr = '.' + ptr;
-  pos = mptr.rfind(IPV4_PTR_DOMAIN);
-  if(pos != std::string::npos)
+  // If not, check IPv6
+  else if (NULL != (p = strcasestr(cptr + ptr.length() + 1 - sizeof(C_IPV6_PTR_DOMAIN), C_IPV6_PTR_DOMAIN)))
   {
+    struct sockaddr_in6 *ip6 = (struct sockaddr_in6 *)&ip;
+    u8 alt = 0;
+    size_t i=0;
 
-    std::string octet;
-    std::string::const_reverse_iterator crend = mptr.rend();
-    for (std::string::const_reverse_iterator it = crend-pos; it != crend; ++it)
+    p--;
+    while (p >= cptr && i < sizeof(ip6->sin6_addr.s6_addr))
     {
-      const char &c = *it;
-      if(c == '.')
+      if (*p == '.')
       {
-        std::reverse(octet.begin(), octet.end());
-        ip_str += octet + '.';
-        octet.clear();
+        p--;
       }
-      else octet += c;
+      if (p < cptr)
+      {
+        break;
+      }
+      u8 n = *p;
+      // First subtract base regardless of underflow:
+      if (n < 0x3A) { // 0-9
+        n -= 0x30;
+      }
+      else if (n < 0x47) { // A-F
+        n -= 0x37;
+      }
+      else if (n < 0x67) { // a-f
+        n -= 0x57;
+      }
+      else { // invalid
+        return false;
+      }
+      // Now catch any of the underflow conditions above:
+      if (n > 0xf) { // invalid
+        return false;
+      }
+      if (alt == 0) { // high nibble
+        ip6->sin6_addr.s6_addr[i] += n << 4;
+        alt = 1;
+      }
+      else { // low nibble
+        ip6->sin6_addr.s6_addr[i] += n;
+        alt = 0;
+        i++;
+      }
+      p--;
     }
-
-    std::string::iterator it = ip_str.end()-1;
-    if( *it == '.') ip_str.erase(it);
+    ip.ss_family = AF_INET6;
   }
-
-  if(ip_str.empty())
-    return false;
-
-  return sockaddr_storage_inet_pton(ip_str.c_str(), &ip);
+  return true;
 }
 
-size_t DNS::Factory::buildSimpleRequest(const std::string &name, RECORD_TYPE rt, u8 *buf, size_t maxlen)
+size_t DNS::Factory::buildSimpleRequest(u16 id, const std::string &name, RECORD_TYPE rt, u8 *buf, size_t maxlen)
 {
   size_t ret=0 , tmp=0;
-  DNS_CHECK_ACCUMLATE(ret, tmp, putUnsignedShort(progressiveId++, buf, ID, maxlen)); // Postincrement inmportant here
+  DNS_CHECK_ACCUMLATE(ret, tmp, putUnsignedShort(id, buf, ID, maxlen));
   DNS_CHECK_ACCUMLATE(ret, tmp, putUnsignedShort(OP_STANDARD_QUERY | RECURSION_DESIRED, buf, FLAGS_OFFSET, maxlen));
   DNS_CHECK_ACCUMLATE(ret, tmp, putUnsignedShort(1, buf, QDCOUNT, maxlen));
   DNS_CHECK_ACCUMLATE(ret, tmp, putUnsignedShort(0, buf, ANCOUNT, maxlen));
@@ -1479,11 +1713,11 @@ size_t DNS::Factory::buildSimpleRequest(const std::string &name, RECORD_TYPE rt,
   return ret;
 }
 
-size_t DNS::Factory::buildReverseRequest(const sockaddr_storage &ip, u8 *buf, size_t maxlen)
+size_t DNS::Factory::buildReverseRequest(u16 id, const sockaddr_storage &ip, u8 *buf, size_t maxlen)
 {
   std::string name;
   if(ipToPtr(ip,name))
-    return buildSimpleRequest(name, PTR, buf, maxlen);
+    return buildSimpleRequest(id, name, PTR, buf, maxlen);
   return 0;
 }
 
@@ -1555,54 +1789,117 @@ size_t DNS::Factory::parseUnsignedInt(u32 &num, const u8 *buf, size_t offset, si
   return 0;
 }
 
+size_t DNS::Factory::parseIPv4(struct in_addr &addr, const u8 *buf, size_t offset, size_t maxlen)
+{
+  size_t max_access = offset+3;
+  if(buf && (maxlen > max_access))
+  {
+    memcpy(&addr, buf + offset, 4);
+    return 4;
+  }
+
+  return 0;
+}
+
+size_t DNS::Factory::parseIPv6(struct in6_addr &addr, const u8 *buf, size_t offset, size_t maxlen)
+{
+  size_t max_access = offset+15;
+  if(buf && (maxlen > max_access))
+  {
+    memcpy(&addr, buf + offset, 16);
+    return 16;
+  }
+
+  return 0;
+}
+
 size_t DNS::Factory::parseDomainName(std::string &name, const u8 *buf, size_t offset, size_t maxlen)
 {
-  size_t tmp, ret = 0;
+  size_t tmp = 0;
+  size_t max_offset = offset;
+  size_t curr_offset = offset;
 
   name.clear();
-  while(u8 label_length = buf[offset+ret++]) // Postincrement important here
+  while(u8 label_length = buf[curr_offset])
   {
     if((label_length & COMPRESSED_NAME) == COMPRESSED_NAME)
     {
-      --ret; // The byte it's part of the pointer, wasn't really consumed yet
       u16 real_offset;
-      DNS_CHECK_ACCUMLATE(ret, tmp, parseUnsignedShort(real_offset, buf, offset+ret, maxlen));
-      real_offset -= COMPRESSED_NAME<<8;
-      if( real_offset < offset)
-      {
-        std::string val;
-        DNS_CHECK_ACCUMLATE(tmp, tmp, parseDomainName(val, buf, real_offset, maxlen));
-        name+=val;
-        return ret;
+      tmp = parseUnsignedShort(real_offset, buf, curr_offset, maxlen);
+      if (tmp < 1) {
+        return 0;
       }
-      else return 0;
+      if (curr_offset >= max_offset) {
+        max_offset = curr_offset + tmp;
+      }
+      real_offset -= COMPRESSED_NAME<<8;
+      if(real_offset < curr_offset)
+      {
+        curr_offset = real_offset;
+        continue;
+      }
+      else {
+        if (o.debugging) {
+          log_write(LOG_STDOUT, "DNS compression pointer is not backwards\n");
+        }
+        return 0;
+      }
     }
 
-    for(u8 i=0; i<label_length; ++i)
-    {
-      size_t index = offset+ret++;  // Postincrement important here
-      DNS_CHECK_UPPER_BOUND(index, maxlen);
-      name += buf[index];
+    if (label_length > DNS_LABEL_MAX_LENGTH) {
+      if (o.debugging) {
+        log_write(LOG_STDOUT, "DNS label exceeds max length\n");
+      }
+      return 0;
+    }
+
+    curr_offset++;
+    DNS_CHECK_UPPER_BOUND(curr_offset + label_length, maxlen);
+    name.append(reinterpret_cast<const char *>(buf + curr_offset), label_length);
+    curr_offset += label_length;
+    if (curr_offset > max_offset) {
+      max_offset = curr_offset;
     }
     name += '.';
+
+    if (name.length() > DNS_NAME_MAX_LENGTH - 1) {
+      if (o.debugging) {
+        log_write(LOG_STDOUT, "DNS name exceeds max length\n");
+      }
+      return 0;
+    }
+  }
+
+  if (max_offset == curr_offset && buf[curr_offset] == '\0') {
+    max_offset++;
   }
 
   std::string::iterator it = name.end()-1;
   if( *it == '.') name.erase(it);
 
-  return ret;
+  return max_offset - offset;
 }
 
-size_t DNS::A_Record::parseFromBuffer(const u8 *buf, size_t offset, size_t maxlen)
+size_t DNS::A_Record::parseFromBuffer(const u8 *buf, size_t offset, size_t maxlen, RECORD_TYPE rt)
 {
   size_t tmp, ret = 0;
-  u32 num;
-  DNS_CHECK_ACCUMLATE(ret, tmp, Factory::parseUnsignedInt(num, buf, offset, maxlen));
+  struct sockaddr_in * ip4addr = (sockaddr_in *) &value;
+  struct sockaddr_in6 * ip6addr = (sockaddr_in6 *) &value;
 
   memset(&value, 0, sizeof(value));
-  struct sockaddr_in * ip4addr = (sockaddr_in *) &value;
-  ip4addr->sin_family = AF_INET;
-  ip4addr->sin_addr.s_addr = htonl(num);
+  switch (rt) {
+    case DNS::A:
+      DNS_CHECK_ACCUMLATE(ret, tmp, Factory::parseIPv4(ip4addr->sin_addr, buf, offset, maxlen));
+      ip4addr->sin_family = AF_INET;
+      break;
+    case DNS::AAAA:
+      DNS_CHECK_ACCUMLATE(ret, tmp, Factory::parseIPv6(ip6addr->sin6_addr, buf, offset, maxlen));
+      ip6addr->sin6_family = AF_INET6;
+      break;
+    default:
+      return 0;
+      break;
+  }
 
   return ret;
 }
@@ -1640,6 +1937,7 @@ size_t DNS::Answer::parseFromBuffer(const u8 *buf, size_t offset, size_t maxlen)
     switch(record_type)
     {
     case A:
+    case AAAA:
     {
       record = new A_Record();
       break;
@@ -1658,7 +1956,7 @@ size_t DNS::Answer::parseFromBuffer(const u8 *buf, size_t offset, size_t maxlen)
       return 0;
     }
 
-    DNS_CHECK_ACCUMLATE(ret, tmp, record->parseFromBuffer(buf, offset+ret, maxlen));
+    DNS_CHECK_ACCUMLATE(ret, tmp, record->parseFromBuffer(buf, offset+ret, maxlen, (RECORD_TYPE) record_type));
   }
 
   return ret;
@@ -1706,4 +2004,32 @@ size_t DNS::Packet::parseFromBuffer(const u8 *buf, size_t maxlen)
   };
 
   return ret;
+}
+
+const char *DNS::Request::repr() const
+{
+#define REPR_BUFSIZE (FQDN_LEN + 16)
+  static char buf[REPR_BUFSIZE] = "\0";
+  switch(type) {
+    case DNS::NONE:
+      return "Uninitialized request";
+      break;
+    case DNS::A:
+    case DNS::AAAA:
+    case DNS::ANY:
+      Snprintf(buf, REPR_BUFSIZE, "%s/%d", name.c_str(), type);
+      break;
+    case DNS::PTR:
+      if (ssv.size() > 0) {
+        return inet_ntop_ez(&ssv.front(), sizeof(struct sockaddr_storage));
+      }
+      else {
+        return "Uninitialized PTR request";
+      }
+      break;
+    default:
+      Snprintf(buf, REPR_BUFSIZE, "Invalid request: %d", type);
+      break;
+  }
+  return buf;
 }

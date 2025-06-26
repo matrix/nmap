@@ -12,6 +12,7 @@
 -- * IMAP
 -- * LDAP
 -- * NNTP
+-- * MySQL
 -- * POP3
 -- * PostgreSQL
 -- * SMTP
@@ -27,6 +28,7 @@ local ftp = require "ftp"
 local ldap = require "ldap"
 local match = require "match"
 local mssql = require "mssql"
+local mysql = require "mysql"
 local nmap = require "nmap"
 local smtp = require "smtp"
 local stdnse = require "stdnse"
@@ -36,16 +38,32 @@ local tableaux = require "tableaux"
 local tls = require "tls"
 local vnc = require "vnc"
 local xmpp = require "xmpp"
+local have_openssl, openssl = pcall(require, "openssl")
 _ENV = stdnse.module("sslcert", stdnse.seeall)
 
---- Parse an X.509 certificate from DER-encoded string
---@name parse_ssl_certificate
---@class function
---@param der DER-encoded certificate
---@return table containing decoded certificate or nil on failure
---@return error string if parsing failed
---@see nmap.get_ssl_certificate
-_ENV.parse_ssl_certificate = nmap.socket.parse_ssl_certificate
+if have_openssl then
+  --- Parse an X.509 certificate from DER-encoded string
+  --
+  -- This uses OpenSSL's X.509 parsing routines, so if OpenSSL support is not
+  -- included, only the <code>pem</code> key of the returned table will be
+  -- present.
+  --@name parse_ssl_certificate
+  --@class function
+  --@param der DER-encoded certificate
+  --@return table containing decoded certificate or nil on failure
+  --@return error string if parsing failed
+  --@see nmap.get_ssl_certificate
+  _ENV.parse_ssl_certificate = nmap.socket.parse_ssl_certificate
+else
+  local base64 = require "base64"
+  _ENV.parse_ssl_certificate = function(der)
+    return {
+      pem = ("-----BEGIN CERTIFICATE-----\n%s\n-----END CERTIFICATE-----\n"):format(
+        base64.enc(der):gsub("(" .. ("."):rep(64) .. ")", "%1\n"):gsub("\n$", "")
+        )
+    }
+  end
+end
 
 -- Mark whether this port supports STARTTLS, to save connection attempts later.
 -- If it ever succeeds, it can't be marked as failing later, but if it fails
@@ -377,6 +395,40 @@ StartTLS = {
   end,
 
   lmtp_prepare_tls = tls_reconnect("lmtp_prepare_tls_without_reconnect"),
+
+  mysql_prepare_tls_without_reconnect = function(host, port)
+    local s, err = comm.opencon(host, port)
+    if not s then
+      return false, string.format("Failed to connect to MySQL server: %s", err)
+    end
+    local status, resp = mysql.receiveGreeting(s)
+    if not status then
+      return false, string.format("MySQL handshake error: %s", resp)
+    end
+    if 0 == resp.capabilities & mysql.Capabilities.SwitchToSSLAfterHandshake then
+      return false, "MySQL server does not support SSL"
+    end
+    local clicap = mysql.Capabilities.SwitchToSSLAfterHandshake
+    + mysql.Capabilities.LongPassword
+    + mysql.Capabilities.LongColumnFlag
+    + mysql.Capabilities.SupportsLoadDataLocal
+    + mysql.Capabilities.Speaks41ProtocolNew
+    + mysql.Capabilities.InteractiveClient
+    + mysql.Capabilities.SupportsTransactions
+    + mysql.Capabilities.Support41Auth
+    local packet = string.pack( "<I2I2I4B c23",
+      clicap,
+      0,
+      16777216,
+      mysql.Charset.latin1_COLLATE_latin1_swedish_ci,
+      string.rep("\0", 23)
+      )
+    packet = string.pack("<I4", #packet + (1 << 24)) .. packet
+    s:send(packet)
+    return true, s
+  end,
+
+  mysql_prepare_tls = tls_reconnect("mysql_prepare_tls_without_reconnect"),
 
   nntp_prepare_tls_without_reconnect = function(host, port)
     local s, err, result = comm.opencon(host, port, "", {lines=1, recv_before=true})
@@ -766,6 +818,8 @@ local SPECIALIZED_PREPARE_TLS = {
   smtp = StartTLS.smtp_prepare_tls,
   [25] = StartTLS.smtp_prepare_tls,
   [587] = StartTLS.smtp_prepare_tls,
+  mysql = StartTLS.mysql_prepare_tls,
+  [3306] = StartTLS.mysql_prepare_tls,
   xmpp = StartTLS.xmpp_prepare_tls,
   [5222] = StartTLS.xmpp_prepare_tls,
   [5269] = StartTLS.xmpp_prepare_tls,
@@ -791,6 +845,8 @@ local SPECIALIZED_PREPARE_TLS_WITHOUT_RECONNECT = {
   smtp = StartTLS.smtp_prepare_tls_without_reconnect,
   [25] = StartTLS.smtp_prepare_tls_without_reconnect,
   [587] = StartTLS.smtp_prepare_tls_without_reconnect,
+  mysql = StartTLS.mysql_prepare_tls_without_reconnect,
+  [3306] = StartTLS.mysql_prepare_tls_without_reconnect,
   xmpp = StartTLS.xmpp_prepare_tls_without_reconnect,
   [5222] = StartTLS.xmpp_prepare_tls_without_reconnect,
   [5269] = StartTLS.xmpp_prepare_tls_without_reconnect,
@@ -863,9 +919,12 @@ local function get_record_iter(sock)
   local i = 1
   local fragment
   return function ()
-    local record
-    i, record = tls.record_read(buffer, i, fragment)
+    local record, more
+    i, record, more = tls.record_read(buffer, i, fragment)
     if record == nil then
+      if not more then
+        return nil, "no more"
+      end
       local status, err
       status, buffer, err = tls.record_buffer(sock, buffer, i)
       if not status then
@@ -881,76 +940,38 @@ local function get_record_iter(sock)
   end
 end
 
---- Gets a certificate for the given host and port
--- The function will attempt to START-TLS for the ports known to require it.
--- @param host table as received by the script action function
--- @param port table as received by the script action function
--- @return status true on success, false on failure
--- @return cert userdata containing the SSL certificate, or error message on
---         failure.
-function getCertificate(host, port)
-  local mutex = nmap.mutex("sslcert-cache-mutex")
-  mutex "lock"
-
-  if ( host.registry["ssl-cert"] and
-    host.registry["ssl-cert"][port.number] ) then
-    stdnse.debug2("sslcert: Returning cached SSL certificate")
-    mutex "done"
-    return true, host.registry["ssl-cert"][port.number]
-  end
-
-  local cert
-
-  -- If we don't already know the service is TLS wrapped check to see if we
-  -- have to use a wrapper and do a manual handshake
-  local wrapper
-  if not ( port.version.service_tunnel == 'ssl' ) then
-    wrapper = SPECIALIZED_WRAPPED_TLS_WITHOUT_RECONNECT[port.service] or SPECIALIZED_WRAPPED_TLS_WITHOUT_RECONNECT[port.number]
-  end
-
-  if wrapper then
-    local status, socket = wrapper(host, port)
-    if not status then
-      mutex "done"
-      return false, socket
-    end
-
+local function handshake_cert (socket)
     -- logic mostly lifted from ssl-enum-ciphers
-    local hello = tls.client_hello()
+    -- TODO: implement TLSv1.3 handshake encryption so we can decrypt the
+    -- Certificate message. Until then, we don't attempt TLSv1.3
+    local hello = tls.client_hello({protocol="TLSv1.2"})
     local status, err = socket:send(hello)
     if not status then
-      mutex "done"
-      return false, "Failed to connect to server"
+      return false, "Failed to send to server"
     end
 
     local get_next_record = get_record_iter(socket)
     local records = {}
-    while true do
+    local done = false
+    while not done do
       local record
       record, err = get_next_record()
       if not record then
         stdnse.debug1("no record: %s", err)
-        socket:close()
         break
       end
       -- Collect message bodies into one record per type
       records[record.type] = records[record.type] or record
-      local done = false
       for j = 1, #record.body do -- no ipairs because we append below
         local b = record.body[j]
         done = ((record.type == "alert" and b.level == "fatal") or
           (record.type == "handshake" and b.type == "server_hello_done"))
         table.insert(records[record.type].body, b)
       end
-      if done then
-        socket:close()
-        break
-      end
     end
 
     local handshake = records.handshake
     if not handshake then
-      mutex "done"
       return false, "Server did not handshake"
     end
 
@@ -962,48 +983,113 @@ function getCertificate(host, port)
       end
     end
     if not certs or not next(certs.certificates) then
-      mutex "done"
       return false, "Server sent no certificate"
     end
 
-    cert, err = parse_ssl_certificate(certs.certificates[1])
+    local cert, err = parse_ssl_certificate(certs.certificates[1])
     if not cert then
-      mutex "done"
-      return false, ("Unable to get cert: %s"):format(err)
+      return false, ("Unable to parse cert: %s"):format(err)
     end
-  else
-    -- If we don't already know the service is TLS wrapped check to see if
-    -- there a specialized function for this port
-    local specialized
-    if not ( port.version.service_tunnel == 'ssl' ) then
-      specialized = SPECIALIZED_PREPARE_TLS[port.service] or SPECIALIZED_PREPARE_TLS[port.number]
-    end
-    local status
-    local socket = nmap.new_socket()
-    if specialized then
-      status, socket = specialized(host, port)
-      if not status then
-        mutex "done"
-        stdnse.debug1("Specialized function error: %s", socket)
-        return false, "Failed to connect to server"
-      end
+    return true, cert
+end
+
+--- Gets a certificate for the given host and port
+-- The function will attempt to START-TLS for the ports known to require it.
+-- @param host table as received by the script action function
+-- @param port table as received by the script action function
+-- @return status true on success, false on failure
+-- @return cert userdata containing the SSL certificate, or error message on
+--         failure.
+function getCertificate(host, port)
+  local mutex = nmap.mutex("sslcert-cache-mutex")
+  mutex "lock"
+
+  local cache = host.registry["ssl-cert"]
+  if not cache then
+    cache = {}
+    host.registry["ssl-cert"] = cache
+  end
+  local key = ("%d%s"):format(port.number, port.protocol)
+  local cert = cache[key]
+
+  if cert then
+    stdnse.debug2("sslcert: Returning cached SSL certificate")
+    mutex "done"
+    return true, cert
+  end
+
+  local wrapper, specialized
+  if (port.protocol == "tcp") then
+    wrapper = SPECIALIZED_WRAPPED_TLS_WITHOUT_RECONNECT[port.service] or SPECIALIZED_WRAPPED_TLS_WITHOUT_RECONNECT[port.number]
+    local special_table = have_openssl and SPECIALIZED_PREPARE_TLS or SPECIALIZED_PREPARE_TLS_WITHOUT_RECONNECT
+    specialized = special_table[port.service] or special_table[port.number]
+  end
+
+  local status = false
+
+  -- If we don't already know the service is TLS wrapped check to see if we
+  -- have to use a wrapper and do a manual handshake
+  if wrapper and port.version.service_tunnel ~= 'ssl' then
+    local socket
+    status, socket = wrapper(host, port)
+    if not status then
+      stdnse.debug1("Wrapper function error: %s", socket)
     else
-      status = socket:connect(host, port, "ssl")
-      if ( not(status) ) then
-        mutex "done"
-        return false, "Failed to connect to server"
-      end
-    end
-    cert = socket:get_ssl_certificate()
-    if ( cert == nil ) then
-      mutex "done"
-      return false, "Unable to get cert"
+      status, cert = handshake_cert(socket)
+      socket:close()
     end
   end
 
-  host.registry["ssl-cert"] = host.registry["ssl-cert"] or {}
-  host.registry["ssl-cert"][port.number] = host.registry["ssl-cert"][port.number] or {}
-  host.registry["ssl-cert"][port.number] = cert
+  -- If that didn't work, see if we need a specialized connection method
+  if not status and specialized and port.version.service_tunnel ~= 'ssl' then
+    local socket
+    status, socket = specialized(host, port)
+    if not status then
+      stdnse.debug1("Specialized function error: %s", socket)
+    else
+      if have_openssl then
+        cert = socket:get_ssl_certificate()
+        status = not not cert
+      else
+        status, cert = handshake_cert(socket)
+      end
+      socket:close()
+    end
+  end
+
+  -- Now try to connect with Nsock's SSL connection
+  if not status and have_openssl then
+    local socket, errmsg = comm.opencon(host, port, nil, {proto="ssl"})
+    if not socket then
+      stdnse.debug1("SSL connect error: %s", errmsg)
+    else
+      cert = socket:get_ssl_certificate()
+      status = not not cert
+      socket:close()
+    end
+  end
+
+  -- Finally, try to connect and manually handshake (maybe more tolerant of TLS
+  -- insecurity than OpenSSL)
+  -- TODO: DTLS handshaking
+  if not status and port.protocol == "tcp" then
+    local socket = nmap.new_socket()
+    local errmsg
+    status, errmsg = socket:connect(host, port)
+    if not status then
+      stdnse.debug1("Connect error: %s", errmsg)
+    else
+      status, cert = handshake_cert(socket)
+      socket:close()
+    end
+  end
+
+  if not status then
+    mutex "done"
+    return false, "No certificate found"
+  end
+
+  cache[key] = cert
   mutex "done"
   return true, cert
 end

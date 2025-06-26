@@ -153,6 +153,7 @@ static void push_osmatch_table(lua_State *L, const FingerMatch *match,
  * points to nil!
  * */
 void set_hostinfo(lua_State *L, Target *currenths) {
+  nseU_setpfield(L, -1, "_Target", (void *)currenths);
   nseU_setsfield(L, -1, "ip", currenths->targetipstr());
   nseU_setsfield(L, -1, "name", currenths->HostName());
   nseU_setsfield(L, -1, "targetname", currenths->TargetName());
@@ -623,7 +624,14 @@ static int l_log_write (lua_State *L)
 
 static int finalize_cleanup (lua_State *L, int status, lua_KContext ctx)
 {
-  lua_settop(L, 2);
+  lua_settop(L, 2); // top of stack: error message
+  lua_createtable(L, 0, 2); // error object table
+  lua_pushliteral(L, "errtype");
+  lua_pushliteral(L, "nmap.new_try");
+  lua_rawset(L, -3);
+  lua_pushliteral(L, "message"); // stack: err(string), err(table), "message"
+  lua_rotate(L, -3, -1); // stack: err(table), "message", err(string)
+  lua_rawset(L, -3);
   return lua_error(L);
 }
 
@@ -663,7 +671,7 @@ static int l_get_version_intensity (lua_State *L)
   lua_pop(L,1);
 
   if (selected_by_name) {
-    lua_pushnumber(L, max_intensity);
+    lua_pushinteger(L, max_intensity);
     return 1;
   }
 
@@ -690,7 +698,7 @@ static int l_get_version_intensity (lua_State *L)
     }
   }
 
-  lua_pushnumber(L, intensity);
+  lua_pushinteger(L, intensity);
 
   return 1;
 }
@@ -704,13 +712,13 @@ static int l_get_verbosity (lua_State *L)
      we lie to it and say the verbosity is one higher than it really is. */
   verbosity += (nse_selectedbyname(L), lua_toboolean(L, -1) ? 1 : 0);
 
-  lua_pushnumber(L, verbosity);
+  lua_pushinteger(L, verbosity);
   return 1;
 }
 
 static int l_get_debugging (lua_State *L)
 {
-  lua_pushnumber(L, o.debugging);
+  lua_pushinteger(L, o.debugging);
   return 1;
 }
 
@@ -735,7 +743,7 @@ static int l_fetchfile (lua_State *L)
 
 static int l_get_timing_level (lua_State *L)
 {
-  lua_pushnumber(L, o.timing_level);
+  lua_pushinteger(L, o.timing_level);
   return 1;
 }
 
@@ -767,18 +775,18 @@ static int l_add_targets (lua_State *L)
     }
     /* was able to add some targets */
     if (ntarget) {
-      lua_pushnumber(L, ntarget);
+      lua_pushinteger(L, ntarget);
       return 1;
     /* errors */
     } else {
-      lua_pushnumber(L, ntarget);
+      lua_pushinteger(L, ntarget);
       lua_pushstring(L, "failed to add new targets.");
       return 2;
     }
   } else {
       /* function called without arguments */
       /* push the number of pending targets that are in the queue */
-      lua_pushnumber(L, NewTargets::insert(""));
+      lua_pushinteger(L, NewTargets::get_queued());
       return 1;
   }
 }
@@ -786,7 +794,7 @@ static int l_add_targets (lua_State *L)
 /* Return the number of added targets */
 static int l_get_new_targets_num (lua_State *L)
 {
-  lua_pushnumber(L, NewTargets::get_number());
+  lua_pushinteger(L, NewTargets::get_number());
   return 1;
 }
 
@@ -943,9 +951,9 @@ static int l_list_interfaces (lua_State *L)
 static int l_get_ttl (lua_State *L)
 {
   if (o.ttl < 0 || o.ttl > 255)
-    lua_pushnumber(L, 64); //default TTL
+    lua_pushinteger(L, 64); //default TTL
   else
-    lua_pushnumber(L, o.ttl);
+    lua_pushinteger(L, o.ttl);
   return 1;
 }
 
@@ -956,9 +964,9 @@ static int l_get_ttl (lua_State *L)
 static int l_get_payload_length(lua_State *L)
 {
   if (o.extra_payload_length < 0)
-    lua_pushnumber(L, 0); //default payload length
+    lua_pushinteger(L, 0); //default payload length
   else
-    lua_pushnumber(L, o.extra_payload_length);
+    lua_pushinteger(L, o.extra_payload_length);
   return 1;
 }
 

@@ -1,4 +1,4 @@
-Ncat 7.70SVN ( https://nmap.org/ncat )
+Ncat 7.97SVN ( https://nmap.org/ncat )
 Usage: ncat [options] [hostname] [port]
 
 Options taking a time assume seconds. Append 'ms' for milliseconds,
@@ -6,6 +6,7 @@ Options taking a time assume seconds. Append 'ms' for milliseconds,
   -4                         Use IPv4 only
   -6                         Use IPv6 only
   -U, --unixsock             Use Unix domain sockets only
+      --vsock                Use vsock sockets only
   -C, --crlf                 Use CRLF for EOL sequence
   -c, --sh-exec <command>    Executes the given command via /bin/sh
   -e, --exec <command>       Executes the given command
@@ -32,6 +33,8 @@ Options taking a time assume seconds. Append 'ms' for milliseconds,
       --append-output        Append rather than clobber specified output files
       --send-only            Only send data, ignoring received; quit on EOF
       --recv-only            Only receive data, never send anything
+      --no-shutdown          Continue half-duplex when receiving EOF on stdin
+  -q <time>                  After EOF on stdin, wait <time> then quit.
       --allow                Allow only given hosts to connect to Ncat
       --allowfile            A file of hosts allowed to connect to Ncat
       --deny                 Deny given hosts from connecting to Ncat
@@ -39,15 +42,9 @@ Options taking a time assume seconds. Append 'ms' for milliseconds,
       --broker               Enable Ncat's connection brokering mode
       --chat                 Start a simple Ncat chat server
       --proxy <addr[:port]>  Specify address of host to proxy through
-      --proxy-type <type>    Specify proxy type ("http" or "socks4" or "socks5")
+      --proxy-type <type>    Specify proxy type ("http", "socks4", "socks5")
       --proxy-auth <auth>    Authenticate with HTTP or SOCKS proxy server
-      --ssl                  Connect or listen with SSL
-      --ssl-cert             Specify SSL certificate file (PEM) for listening
-      --ssl-key              Specify SSL private key (PEM) for listening
-      --ssl-verify           Verify trust and domain name of certificates
-      --ssl-trustfile        PEM file containing trusted SSL certificates
-      --ssl-ciphers          Cipherlist containing SSL ciphers to use
-      --ssl-alpn             ALPN protocol list to use.
+      --proxy-dns <type>     Specify where to resolve proxy destination
       --version              Display Ncat's version information and exit
 
 See the ncat(1) manpage for full options, descriptions and usage examples

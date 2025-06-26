@@ -1,130 +1,60 @@
-
 /***************************************************************************
  * netutil.cc                                                              *
  *                                                                         *
  ***********************IMPORTANT NMAP LICENSE TERMS************************
- *                                                                         *
- * The Nmap Security Scanner is (C) 1996-2018 Insecure.Com LLC ("The Nmap  *
- * Project"). Nmap is also a registered trademark of the Nmap Project.     *
- * This program is free software; you may redistribute and/or modify it    *
- * under the terms of the GNU General Public License as published by the   *
- * Free Software Foundation; Version 2 ("GPL"), BUT ONLY WITH ALL OF THE   *
- * CLARIFICATIONS AND EXCEPTIONS DESCRIBED HEREIN.  This guarantees your   *
- * right to use, modify, and redistribute this software under certain      *
- * conditions.  If you wish to embed Nmap technology into proprietary      *
- * software, we sell alternative licenses (contact sales@nmap.com).        *
- * Dozens of software vendors already license Nmap technology such as      *
- * host discovery, port scanning, OS detection, version detection, and     *
- * the Nmap Scripting Engine.                                              *
- *                                                                         *
- * Note that the GPL places important restrictions on "derivative works",  *
- * yet it does not provide a detailed definition of that term.  To avoid   *
- * misunderstandings, we interpret that term as broadly as copyright law   *
- * allows.  For example, we consider an application to constitute a        *
- * derivative work for the purpose of this license if it does any of the   *
- * following with any software or content covered by this license          *
- * ("Covered Software"):                                                   *
- *                                                                         *
- * o Integrates source code from Covered Software.                         *
- *                                                                         *
- * o Reads or includes copyrighted data files, such as Nmap's nmap-os-db   *
- * or nmap-service-probes.                                                 *
- *                                                                         *
- * o Is designed specifically to execute Covered Software and parse the    *
- * results (as opposed to typical shell or execution-menu apps, which will *
- * execute anything you tell them to).                                     *
- *                                                                         *
- * o Includes Covered Software in a proprietary executable installer.  The *
- * installers produced by InstallShield are an example of this.  Including *
- * Nmap with other software in compressed or archival form does not        *
- * trigger this provision, provided appropriate open source decompression  *
- * or de-archiving software is widely available for no charge.  For the    *
- * purposes of this license, an installer is considered to include Covered *
- * Software even if it actually retrieves a copy of Covered Software from  *
- * another source during runtime (such as by downloading it from the       *
- * Internet).                                                              *
- *                                                                         *
- * o Links (statically or dynamically) to a library which does any of the  *
- * above.                                                                  *
- *                                                                         *
- * o Executes a helper program, module, or script to do any of the above.  *
- *                                                                         *
- * This list is not exclusive, but is meant to clarify our interpretation  *
- * of derived works with some common examples.  Other people may interpret *
- * the plain GPL differently, so we consider this a special exception to   *
- * the GPL that we apply to Covered Software.  Works which meet any of     *
- * these conditions must conform to all of the terms of this license,      *
- * particularly including the GPL Section 3 requirements of providing      *
- * source code and allowing free redistribution of the work as a whole.    *
- *                                                                         *
- * As another special exception to the GPL terms, the Nmap Project grants  *
- * permission to link the code of this program with any version of the     *
- * OpenSSL library which is distributed under a license identical to that  *
- * listed in the included docs/licenses/OpenSSL.txt file, and distribute   *
- * linked combinations including the two.                                  *
- *                                                                         *
- * The Nmap Project has permission to redistribute Npcap, a packet         *
- * capturing driver and library for the Microsoft Windows platform.        *
- * Npcap is a separate work with it's own license rather than this Nmap    *
- * license.  Since the Npcap license does not permit redistribution        *
- * without special permission, our Nmap Windows binary packages which      *
- * contain Npcap may not be redistributed without special permission.      *
- *                                                                         *
- * Any redistribution of Covered Software, including any derived works,    *
- * must obey and carry forward all of the terms of this license, including *
- * obeying all GPL rules and restrictions.  For example, source code of    *
- * the whole work must be provided and free redistribution must be         *
- * allowed.  All GPL references to "this License", are to be treated as    *
- * including the terms and conditions of this license text as well.        *
- *                                                                         *
- * Because this license imposes special exceptions to the GPL, Covered     *
- * Work may not be combined (even as part of a larger work) with plain GPL *
- * software.  The terms, conditions, and exceptions of this license must   *
- * be included as well.  This license is incompatible with some other open *
- * source licenses as well.  In some cases we can relicense portions of    *
- * Nmap or grant special permissions to use it in other open source        *
- * software.  Please contact fyodor@nmap.org with any such requests.       *
- * Similarly, we don't incorporate incompatible open source software into  *
- * Covered Software without special permission from the copyright holders. *
- *                                                                         *
- * If you have any questions about the licensing restrictions on using     *
- * Nmap in other works, we are happy to help.  As mentioned above, we also *
- * offer an alternative license to integrate Nmap into proprietary         *
- * applications and appliances.  These contracts have been sold to dozens  *
- * of software vendors, and generally include a perpetual license as well  *
- * as providing support and updates.  They also fund the continued         *
- * development of Nmap.  Please email sales@nmap.com for further           *
- * information.                                                            *
- *                                                                         *
- * If you have received a written license agreement or contract for        *
- * Covered Software stating terms other than these, you may choose to use  *
- * and redistribute Covered Software under those terms instead of these.   *
- *                                                                         *
- * Source is provided to this software because we believe users have a     *
- * right to know exactly what a program is going to do before they run it. *
- * This also allows you to audit the software for security holes.          *
- *                                                                         *
- * Source code also allows you to port Nmap to new platforms, fix bugs,    *
- * and add new features.  You are highly encouraged to send your changes   *
- * to the dev@nmap.org mailing list for possible incorporation into the    *
- * main distribution.  By sending these changes to Fyodor or one of the    *
- * Insecure.Org development mailing lists, or checking them into the Nmap  *
- * source code repository, it is understood (unless you specify            *
- * otherwise) that you are offering the Nmap Project the unlimited,        *
- * non-exclusive right to reuse, modify, and relicense the code.  Nmap     *
- * will always be available Open Source, but this is important because     *
- * the inability to relicense code has caused devastating problems for     *
- * other Free Software projects (such as KDE and NASM).  We also           *
- * occasionally relicense the code to third parties as discussed above.    *
- * If you wish to specify special license conditions of your               *
- * contributions, just say so when you send them.                          *
- *                                                                         *
- * This program is distributed in the hope that it will be useful, but     *
- * WITHOUT ANY WARRANTY; without even the implied warranty of              *
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the Nmap      *
- * license file for more details (it's in a COPYING file included with     *
- * Nmap, and also available from https://svn.nmap.org/nmap/COPYING)        *
- *                                                                         *
+ *
+ * The Nmap Security Scanner is (C) 1996-2025 Nmap Software LLC ("The Nmap
+ * Project"). Nmap is also a registered trademark of the Nmap Project.
+ *
+ * This program is distributed under the terms of the Nmap Public Source
+ * License (NPSL). The exact license text applying to a particular Nmap
+ * release or source code control revision is contained in the LICENSE
+ * file distributed with that version of Nmap or source code control
+ * revision. More Nmap copyright/legal information is available from
+ * https://nmap.org/book/man-legal.html, and further information on the
+ * NPSL license itself can be found at https://nmap.org/npsl/ . This
+ * header summarizes some key points from the Nmap license, but is no
+ * substitute for the actual license text.
+ *
+ * Nmap is generally free for end users to download and use themselves,
+ * including commercial use. It is available from https://nmap.org.
+ *
+ * The Nmap license generally prohibits companies from using and
+ * redistributing Nmap in commercial products, but we sell a special Nmap
+ * OEM Edition with a more permissive license and special features for
+ * this purpose. See https://nmap.org/oem/
+ *
+ * If you have received a written Nmap license agreement or contract
+ * stating terms other than these (such as an Nmap OEM license), you may
+ * choose to use and redistribute Nmap under those terms instead.
+ *
+ * The official Nmap Windows builds include the Npcap software
+ * (https://npcap.com) for packet capture and transmission. It is under
+ * separate license terms which forbid redistribution without special
+ * permission. So the official Nmap Windows builds may not be redistributed
+ * without special permission (such as an Nmap OEM license).
+ *
+ * Source is provided to this software because we believe users have a
+ * right to know exactly what a program is going to do before they run it.
+ * This also allows you to audit the software for security holes.
+ *
+ * Source code also allows you to port Nmap to new platforms, fix bugs, and
+ * add new features. You are highly encouraged to submit your changes as a
+ * Github PR or by email to the dev@nmap.org mailing list for possible
+ * incorporation into the main distribution. Unless you specify otherwise, it
+ * is understood that you are offering us very broad rights to use your
+ * submissions as described in the Nmap Public Source License Contributor
+ * Agreement. This is important because we fund the project by selling licenses
+ * with various terms, and also because the inability to relicense code has
+ * caused devastating problems for other Free Software projects (such as KDE
+ * and NASM).
+ *
+ * The free version of Nmap is distributed in the hope that it will be
+ * useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. Warranties,
+ * indemnification and commercial support are all available through the
+ * Npcap OEM program--see https://nmap.org/oem/
+ *
  ***************************************************************************/
 
 /* Since OS X 10.7, we must declare whether we expect RFC 2292 or RFC 3542
@@ -137,9 +67,7 @@
 
 #include "nbase.h"
 
-#ifdef WIN32
-#include "mswin32/winclude.h"
-#else
+#ifndef WIN32
 #include <sys/uio.h>
 #include <sys/ioctl.h>
 #endif
@@ -173,6 +101,11 @@
 # endif
 #endif /* Solaris */
 
+#ifdef WIN32
+typedef unsigned __int32 u_int32_t;
+typedef unsigned __int16 u_int16_t;
+typedef unsigned __int8 u_int8_t;
+#endif
 
 #if HAVE_NETINET_IN_H
 #include <netinet/in.h>
@@ -203,6 +136,8 @@
 #if HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
 #endif
+
+#include <stddef.h>
 
 #define NBASE_MAX_ERR_STR_LEN 1024  /* Max length of an error message */
 
@@ -423,6 +358,7 @@ static int resolve_internal(const char *hostname, unsigned short port,
   struct addrinfo hints;
   struct addrinfo *result;
   char portbuf[16];
+  char *servname = NULL;
   int rc;
 
   assert(hostname);
@@ -435,10 +371,13 @@ static int resolve_internal(const char *hostname, unsigned short port,
   hints.ai_flags |= addl_flags;
 
   /* Make the port number a string to give to getaddrinfo. */
-  rc = Snprintf(portbuf, sizeof(portbuf), "%hu", port);
-  assert(rc >= 0 && (size_t) rc < sizeof(portbuf));
+  if (port != 0) {
+    rc = Snprintf(portbuf, sizeof(portbuf), "%hu", port);
+    assert(rc >= 0 && (size_t) rc < sizeof(portbuf));
+    servname = portbuf;
+  }
 
-  rc = getaddrinfo(hostname, portbuf, &hints, &result);
+  rc = getaddrinfo(hostname, servname, &hints, &result);
   if (rc != 0)
     return rc;
   if (result == NULL)
@@ -485,64 +424,56 @@ int resolve_numeric(const char *ip, unsigned short port,
  * <http://www.cymru.com/Documents/bogon-bn-nonagg.txt> for bogon
  * netblocks.
  */
-int ip_is_reserved(struct in_addr *ip)
+int ip_is_reserved(const struct sockaddr_storage *addr)
 {
-  char *ipc = (char *) &(ip->s_addr);
-  unsigned char i1 = ipc[0], i2 = ipc[1], i3 = ipc[2]; /* i4 not currently used - , i4 = ipc[3]; */
+  static struct addrset *reserved = NULL;
+  assert(addr);
 
-  /* do all the /7's and /8's with a big switch statement, hopefully the
-   * compiler will be able to optimize this a little better using a jump table
-   * or what have you
-   */
-  switch (i1)
-    {
-    case 0:         /* 000/8 is IANA reserved       */
-    case 10:        /* the infamous 10.0.0.0/8      */
-    case 127:       /* 127/8 is reserved for loopback */
-      return 1;
-    default:
-      break;
-    }
+  if (reserved == NULL) {
+    reserved = addrset_new();
 
-  /* 172.16.0.0/12 is reserved for private nets by RFC1918 */
-  if (i1 == 172 && i2 >= 16 && i2 <= 31)
-    return 1;
+    // https://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml
+    addrset_add_spec(reserved, "0.0.0.0/8", AF_INET, 0);
+    addrset_add_spec(reserved, "10.0.0.0/8", AF_INET, 0);
+    addrset_add_spec(reserved, "100.64.0.0/10", AF_INET, 0);
+    addrset_add_spec(reserved, "127.0.0.0/8", AF_INET, 0);
+    addrset_add_spec(reserved, "169.254.0.0/16", AF_INET, 0);
+    addrset_add_spec(reserved, "172.16.0.0/12", AF_INET, 0);
+    addrset_add_spec(reserved, "192.0.0.0/24", AF_INET, 0);
+    //addrset_add_spec(exceptions, "192.0.0.9", AF_INET, 0);
+    //addrset_add_spec(exceptions, "192.0.0.10", AF_INET, 0);
+    addrset_add_spec(reserved, "192.0.2.0/24", AF_INET, 0);
+    addrset_add_spec(reserved, "192.168.0.0/16", AF_INET, 0);
+    addrset_add_spec(reserved, "198.18.0.0/15", AF_INET, 0);
+    addrset_add_spec(reserved, "198.51.100.0/24", AF_INET, 0);
+    addrset_add_spec(reserved, "203.0.113.0/24", AF_INET, 0);
+    addrset_add_spec(reserved, "240.0.0.0/4", AF_INET, 0);
+    addrset_add_spec(reserved, "255.255.255.255", AF_INET, 0);
 
-  /* 192.0.2.0/24 is reserved for documentation and examples (RFC5737) */
-  /* 192.88.99.0/24 is used as 6to4 Relay anycast prefix by RFC3068 */
-  /* 192.168.0.0/16 is reserved for private nets by RFC1918 */
-  if (i1 == 192) {
-    if (i2 == 0 && i3 == 2)
-      return 1;
-    if (i2 == 88 && i3 == 99)
-      return 1;
-    if (i2 == 168)
-      return 1;
+    // https://www.iana.org/assignments/iana-ipv6-special-registry/iana-ipv6-special-registry.xhtml
+    addrset_add_spec(reserved, "::1", AF_INET6, 0);
+    addrset_add_spec(reserved, "::", AF_INET6, 0);
+    addrset_add_spec(reserved, "::ffff:0:0/96", AF_INET6, 0);
+    addrset_add_spec(reserved, "64:ff9b:1::/48", AF_INET6, 0);
+    addrset_add_spec(reserved, "100::/64", AF_INET6, 0);
+    addrset_add_spec(reserved, "100::/64", AF_INET6, 0);
+    addrset_add_spec(reserved, "2001::/23", AF_INET6, 0);
+    //addrset_add_spec(exceptions, "2001:1::1", AF_INET6, 0);
+    //addrset_add_spec(exceptions, "2001:1::2", AF_INET6, 0);
+    //addrset_add_spec(exceptions, "2001:1::3", AF_INET6, 0);
+    //addrset_add_spec(exceptions, "2001:3::/32", AF_INET6, 0);
+    //addrset_add_spec(exceptions, "2001:4:112::/48", AF_INET6, 0);
+    //addrset_add_spec(exceptions, "2001:20::/28", AF_INET6, 0);
+    //addrset_add_spec(exceptions, "2001:30::/28", AF_INET6, 0);
+    addrset_add_spec(reserved, "2001:db8::/32", AF_INET6, 0);
+    addrset_add_spec(reserved, "2002::/16", AF_INET6, 0);
+    addrset_add_spec(reserved, "3fff::/20", AF_INET6, 0);
+    addrset_add_spec(reserved, "5f00::/16", AF_INET6, 0);
+    addrset_add_spec(reserved, "fc00::/7", AF_INET6, 0);
+    addrset_add_spec(reserved, "fe80::/10", AF_INET6, 0);
   }
 
-  /* 198.18.0.0/15 is used for benchmark tests by RFC2544 */
-  /* 198.51.100.0/24 is reserved for documentation (RFC5737) */
-  if (i1 == 198) {
-    if (i2 == 18 || i2 == 19)
-      return 1;
-    if (i2 == 51 && i3 == 100)
-      return 1;
-  }
-
-  /* 169.254.0.0/16 is reserved for DHCP clients seeking addresses - RFC3927 */
-  if (i1 == 169 && i2 == 254)
-    return 1;
-
-  /* 203.0.113.0/24 is reserved for documentation (RFC5737) */
-  if (i1 == 203 && i2 == 0 && i3 == 113)
-    return 1;
-
-  /* 224-239/8 is all multicast stuff */
-  /* 240-255/8 is IANA reserved */
-  if (i1 >= 224)
-    return 1;
-
-  return 0;
+  return addrset_contains(reserved, (struct sockaddr *)addr);
 }
 
 /* A trivial functon that maintains a cache of IP to MAC Address
@@ -952,7 +883,7 @@ int my_pcap_get_selectable_fd(pcap_t *p) {
    fd is selectable? If not, it's possible for the fd to become selectable, then
    for pcap_dispatch to buffer two or more frames, and return only the first one
    Because select doesn't know about pcap's buffer, the fd does not become
-   selectable again, even though another pcap_next would succeed. On these
+   selectable again, even though another pcap_next_ex would succeed. On these
    platforms, we must do a non-blocking read from the fd before doing a select
    on the fd.
 
@@ -970,10 +901,10 @@ int pcap_selectable_fd_one_to_one() {
  * >0 for success. If select() fails we bail out because it couldn't work with
  * the file descriptor we got from my_pcap_get_selectable_fd()
  */
-int pcap_select(pcap_t *p, struct timeval *timeout) {
+int pcap_select(pcap_t *p, long usecs) {
   int ret;
 #ifdef WIN32
-  DWORD msec_timeout = timeout->tv_sec * 1000 + timeout->tv_usec / 1000;
+  DWORD msec_timeout = usecs / 1000;
   HANDLE event = pcap_getevent(p);
   DWORD result = WaitForSingleObject(event, msec_timeout);
 
@@ -995,6 +926,8 @@ int pcap_select(pcap_t *p, struct timeval *timeout) {
   }
 
 #else
+  long elapsed = 0;
+  struct timeval tv, start, now;
   int fd;
   fd_set rfds;
 
@@ -1002,36 +935,115 @@ int pcap_select(pcap_t *p, struct timeval *timeout) {
     return -1;
 
   FD_ZERO(&rfds);
-  FD_SET(fd, &rfds);
+  checked_fd_set(fd, &rfds);
 
+  gettimeofday(&start, NULL);
   do {
     errno = 0;
-    ret = select(fd + 1, &rfds, NULL, NULL, timeout);
+    tv.tv_sec = (usecs - elapsed) / 1000000;
+    tv.tv_usec = (usecs - elapsed) % 1000000;
+
+    ret = select(fd + 1, &rfds, NULL, NULL, &tv);
     if (ret == -1) {
-      if (errno == EINTR)
+      if (errno == EINTR) {
+        gettimeofday(&now, NULL);
+        elapsed = TIMEVAL_SUBTRACT(now, start);
         netutil_error("%s: %s", __func__, strerror(errno));
+      }
       else
         netutil_fatal("Your system does not support select()ing on pcap devices (%s). PLEASE REPORT THIS ALONG WITH DETAILED SYSTEM INFORMATION TO THE nmap-dev MAILING LIST!", strerror(errno));
     }
-  } while (ret == -1);
-
+  } while (ret == -1 && elapsed < usecs);
 #endif
+
   return ret;
 }
 
-int pcap_select(pcap_t *p, long usecs) {
-  struct timeval tv;
+struct netutil_eth_t {
+  union {
+    pcap_t *pt;
+    eth_t *ethsd;
+  };
+  int datalink;
+};
 
-  tv.tv_sec = usecs / 1000000;
-  tv.tv_usec = usecs % 1000000;
-
-  return pcap_select(p, &tv);
+int netutil_eth_datalink(const netutil_eth_t *e) {
+  if (e) return e->datalink;
+  return -1;
 }
 
+#ifdef WIN32
+#define eth_handle(_eth) (_eth->pt)
+#define eth_handle_send pcap_inject
+#define eth_handle_close eth_close
+#else
+#define eth_handle(_eth) (_eth->ethsd)
+#define eth_handle_send eth_send
+#define eth_handle_close eth_close
+#endif
+
+netutil_eth_t *netutil_eth_open(const char *device) {
+  assert(device != NULL);
+  assert(device[0] != '\0');
+
+  netutil_eth_t *e = (netutil_eth_t *)safe_zalloc(sizeof(netutil_eth_t));
+  e->datalink = -1;
+
+#ifdef WIN32
+  char err0r[PCAP_ERRBUF_SIZE] = {0};
+  char pcapdev[128] = {0};
+  int failed = 0;
+  pcap_t *pt = NULL;
+  do {
+    if (!DnetName2PcapName(device, pcapdev, sizeof(pcapdev))) {
+      break;
+    }
+    pt = pcap_create(pcapdev, err0r);
+    if (!pt) {
+      netutil_error("pcap_create(%s) FAILED: %s.", pcapdev, err0r);
+      break;
+    }
+    failed = pcap_activate(pt);
+    if (failed < 0) {
+      // PCAP error
+      netutil_error("pcap_activate(%s) FAILED: %s.", pcapdev, pcap_geterr(pt));
+      pcap_close(pt);
+      return NULL;
+    }
+    else if (failed > 0) {
+      // PCAP warning, report but assume it'll still work
+      netutil_error("pcap_activate(%s) WARNING: %s.", pcapdev, pcap_geterr(pt));
+    }
+    eth_handle(e) = pt;
+    e->datalink = pcap_datalink(pt);
+  } while (0);
+#else
+  eth_handle(e) = eth_open(device);
+  e->datalink = DLT_EN10MB;
+#endif
+
+  if (eth_handle(e) == NULL) {
+    free(e);
+    return NULL;
+  }
+  return e;
+}
+
+void netutil_eth_close(netutil_eth_t *e) {
+  assert(e != NULL);
+  eth_handle_close(eth_handle(e));
+  free(e);
+}
+
+ssize_t	netutil_eth_send(netutil_eth_t *e, const void *buf, size_t len) {
+  assert(e != NULL);
+  assert(eth_handle(e) != NULL);
+  return eth_handle_send(eth_handle(e), buf, len);
+}
 
 /* These two are for eth_open_cached() and eth_close_cached() */
 static char etht_cache_device_name[64];
-static eth_t *etht_cache_device = NULL;
+static netutil_eth_t *etht_cache_device = NULL;
 
 /* A simple function that caches the eth_t from dnet for one device,
    to avoid opening, closing, and re-opening it thousands of tims.  If
@@ -1041,7 +1053,7 @@ static eth_t *etht_cache_device = NULL;
    eth_close() A DEVICE OBTAINED FROM THIS FUNCTION.  Instead, you can
    call eth_close_cached() to close whichever device (if any) is
    cached.  Returns NULL if it fails to open the device. */
-eth_t *eth_open_cached(const char *device) {
+netutil_eth_t *eth_open_cached(const char *device) {
   if (!device)
     netutil_fatal("%s() called with NULL device name!", __func__);
   if (!*device)
@@ -1053,12 +1065,12 @@ eth_t *eth_open_cached(const char *device) {
   }
 
   if (*etht_cache_device_name) {
-    eth_close(etht_cache_device);
+    netutil_eth_close(etht_cache_device);
     etht_cache_device_name[0] = '\0';
     etht_cache_device = NULL;
   }
 
-  etht_cache_device = eth_open(device);
+  etht_cache_device = netutil_eth_open(device);
   if (etht_cache_device)
     Strncpy(etht_cache_device_name, device,
             sizeof(etht_cache_device_name));
@@ -1069,7 +1081,7 @@ eth_t *eth_open_cached(const char *device) {
 /* See the description for eth_open_cached */
 void eth_close_cached() {
   if (etht_cache_device) {
-    eth_close(etht_cache_device);
+    netutil_eth_close(etht_cache_device);
     etht_cache_device = NULL;
     etht_cache_device_name[0] = '\0';
   }
@@ -1452,6 +1464,7 @@ static struct interface_info *getinterfaces_dnet(int *howmany, char *errstr, siz
   return dcrn.ifaces;
 }
 
+static struct interface_info *mydevs = NULL;
 /* Returns an allocated array of struct interface_info representing the
    available interfaces. The number of interfaces is returned in *howmany. This
    function just does caching of results; the real work is done in
@@ -1459,13 +1472,10 @@ static struct interface_info *getinterfaces_dnet(int *howmany, char *errstr, siz
    On error, NULL is returned, howmany is set to -1 and the supplied
    error buffer "errstr", if not NULL, will contain an error message. */
 struct interface_info *getinterfaces(int *howmany, char *errstr, size_t errstrlen) {
-  static int initialized = 0;
-  static struct interface_info *mydevs;
   static int numifaces = 0;
 
-  if (!initialized) {
+  if (mydevs == NULL) {
     mydevs = getinterfaces_dnet(&numifaces, errstr, errstrlen);
-    initialized = 1;
   }
 
   /* These will propagate any error produced in getinterfaces_xxxx() to
@@ -1475,6 +1485,10 @@ struct interface_info *getinterfaces(int *howmany, char *errstr, size_t errstrle
   return mydevs;
 }
 
+void freeinterfaces(void) {
+  free(mydevs);
+  mydevs = NULL;
+}
 
 /* The 'dev' passed in must be at least 32 bytes long. Returns 0 on success. */
 int ipaddr2devname(char *dev, const struct sockaddr_storage *addr) {
@@ -1497,18 +1511,18 @@ int ipaddr2devname(char *dev, const struct sockaddr_storage *addr) {
   return -1;
 }
 
-int devname2ipaddr(char *dev, struct sockaddr_storage *addr) {
-  struct interface_info *mydevs;
-  int numdevs;
+int devname2ipaddr(char *dev, int af, struct sockaddr_storage *addr) {
+  struct interface_info *ifaces;
+  int numifaces;
   int i;
-  mydevs = getinterfaces(&numdevs, NULL, 0);
+  ifaces = getinterfaces(&numifaces, NULL, 0);
 
-  if (!mydevs)
+  if (ifaces == NULL)
     return -1;
 
-  for (i = 0; i < numdevs; i++) {
-    if (!strcmp(dev, mydevs[i].devfullname)) {
-      *addr = mydevs[i].addr;
+  for (i = 0; i < numifaces; i++) {
+    if (af == ifaces[i].addr.ss_family && !strcmp(dev, ifaces[i].devfullname)) {
+      *addr = ifaces[i].addr;
       return 0;
     }
   }
@@ -1525,6 +1539,9 @@ struct interface_info *getInterfaceByName(const char *iname, int af) {
   int ifnum;
 
   ifaces = getinterfaces(&numifaces, NULL, 0);
+
+  if (ifaces == NULL)
+    return NULL;
 
   for (ifnum = 0; ifnum < numifaces; ifnum++) {
     if ((strcmp(ifaces[ifnum].devfullname, iname) == 0 ||
@@ -1671,15 +1688,6 @@ static struct dnet_collector_route_nfo *sysroutes_dnet_find_interfaces(struct dn
   i = 0;
   while (i < dcrn->numroutes) {
     if (dcrn->routes[i].device == NULL) {
-      char destbuf[INET6_ADDRSTRLEN];
-      char gwbuf[INET6_ADDRSTRLEN];
-
-      strncpy(destbuf, inet_ntop_ez(&dcrn->routes[i].dest, sizeof(dcrn->routes[i].dest)), sizeof(destbuf));
-      strncpy(gwbuf, inet_ntop_ez(&dcrn->routes[i].gw, sizeof(dcrn->routes[i].gw)), sizeof(gwbuf));
-      /*
-      netutil_error("WARNING: Unable to find appropriate interface for system route to %s/%u gw %s",
-        destbuf, dcrn->routes[i].netmask_bits, gwbuf);
-      */
       /* Remove this entry from the table. */
       memmove(dcrn->routes + i, dcrn->routes + i + 1, sizeof(dcrn->routes[0]) * (dcrn->numroutes - i - 1));
       dcrn->numroutes--;
@@ -1821,236 +1829,169 @@ int islocalhost(const struct sockaddr_storage *ss) {
 }
 
 
-/* Determines whether the supplied address corresponds to a private,
- * non-Internet-routable address. See RFC1918 for details.
- *
- * Also checks for link-local addressing per RFC3927.
- *
- * Returns 1 if the address is private or 0 otherwise. */
-int isipprivate(const struct sockaddr_storage *addr) {
-  const struct sockaddr_in *sin;
-  char *ipc;
-  unsigned char i1, i2;
-
-  if (!addr)
-    return 0;
-  if (addr->ss_family != AF_INET)
-    return 0;
-  sin = (struct sockaddr_in *) addr;
-
-  ipc = (char *) &(sin->sin_addr.s_addr);
-  i1 = ipc[0];
-  i2 = ipc[1];
-
-  /* 10.0.0.0/8 */
-  if (i1 == 10)
-    return 1;
-
-  /* 172.16.0.0/12 */
-  if (i1 == 172 && i2 >= 16 && i2 <= 31)
-    return 1;
-
-  /* 169.254.0.0/16 - RFC 3927 */
-  if (i1 == 169 && i2 == 254)
-    return 1;
-
-  /* 192.168.0.0/16 */
-  if (i1 == 192 && i2 == 168)
-    return 1;
-
-  return 0;
-}
-
-
 char *nexthdrtoa(u8 nextheader, int acronym){
 
 static char buffer[129];
 memset(buffer, 0, 129);
 
+#define HDRTOA(num, short_name, long_name) \
+  case num: \
+    strncpy(buffer, acronym ? short_name : long_name, 128);\
+    break;
 
 switch(nextheader){
-
-    case 0:
-        if(acronym)
-            strncpy(buffer, "HOPOPT", 128);
-        else
-            strncpy(buffer, "IPv6 Hop-by-Hop Option", 128);
-    break;
-
-
-    case 1:
-        if(acronym)
-            strncpy(buffer, "ICMP", 128);
-        else
-            strncpy(buffer, "Internet Control Message", 128);
-    break;
-
-
-    case 2:
-        if(acronym)
-            strncpy(buffer, "IGMP", 128);
-        else
-            strncpy(buffer, "Internet Group Management", 128);
-    break;
-
-
-    case 4:
-        if(acronym)
-            strncpy(buffer, "IP", 128);
-        else
-            strncpy(buffer, "IP in IP (encapsulation)", 128);
-    break;
-
-
-    case 6:
-        if(acronym)
-            strncpy(buffer, "TCP", 128);
-        else
-            strncpy(buffer, "Transmission Control Protocol", 128);
-    break;
-
-
-    case 8:
-        if(acronym)
-            strncpy(buffer, "EGP", 128);
-        else
-            strncpy(buffer, "Exterior Gateway Protocol", 128);
-    break;
-
-
-    case 9:
-        if(acronym)
-            strncpy(buffer, "IGP", 128);
-        else
-            strncpy(buffer, "Interior Gateway Protocol", 128);
-    break;
-
-
-    case 17:
-        if(acronym)
-            strncpy(buffer, "UDP", 128);
-        else
-            strncpy(buffer, "User Datagram", 128);
-    break;
-
-
-    case 41:
-        if(acronym)
-            strncpy(buffer, "IPv6", 128);
-        else
-            strncpy(buffer, "Internet Protocol version 6", 128);
-    break;
-
-
-    case 43:
-        if(acronym)
-            strncpy(buffer, "IPv6-Route", 128);
-        else
-            strncpy(buffer, "Routing Header for IPv6", 128);
-    break;
-
-
-    case 44:
-        if(acronym)
-            strncpy(buffer, "IPv6-Frag", 128);
-        else
-            strncpy(buffer, "Fragment Header for IPv6", 128);
-    break;
-
-
-    case 50:
-        if(acronym)
-            strncpy(buffer, "ESP", 128);
-        else
-            strncpy(buffer, "Encap Security Payload", 128);
-    break;
-
-
-    case 51:
-        if(acronym)
-            strncpy(buffer, "AH", 128);
-        else
-            strncpy(buffer, "Authentication Header", 128);
-    break;
-
-
-    case 55:
-        if(acronym)
-            strncpy(buffer, "MOBILE", 128);
-        else
-            strncpy(buffer, "IP Mobility", 128);
-    break;
-
-
-    case 58:
-        if(acronym)
-            strncpy(buffer, "IPv6-ICMP", 128);
-        else
-            strncpy(buffer, "ICMP for IPv6", 128);
-    break;
-
-
-    case 59:
-        if(acronym)
-            strncpy(buffer, "IPv6-NoNxt", 128);
-        else
-            strncpy(buffer, "No Next Header for IPv6", 128);
-    break;
-
-
-    case 60:
-        if(acronym)
-            strncpy(buffer, "IPv6-Opts", 128);
-        else
-            strncpy(buffer, "Destination Options for IPv6", 128);
-    break;
-
-
-    case 70:
-        if(acronym)
-            strncpy(buffer, "VISA", 128);
-        else
-            strncpy(buffer, "VISA Protocol", 128);
-    break;
-
-
-    case 88:
-        if(acronym)
-            strncpy(buffer, "EIGRP", 128);
-        else
-            strncpy(buffer, "Enhanced Interior Gateway Routing Protocol ", 128);
-    break;
-
-
-    case 94:
-        if(acronym)
-            strncpy(buffer, "IPIP", 128);
-        else
-            strncpy(buffer, "IP-within-IP Encapsulation Protocol", 128);
-    break;
-
-
-    case 132:
-        if(acronym)
-            strncpy(buffer, "SCTP", 128);
-        else
-            strncpy(buffer, "Stream Control Transmission Protocol", 128);
-    break;
-
-
-    case 133:
-        if(acronym)
-            strncpy(buffer, "FC", 128);
-        else
-            strncpy(buffer, "Fibre Channel", 128);
-    break;
-
-
-    case 135:
-        if(acronym)
-            strncpy(buffer, "MH", 128);
-        else
-            strncpy(buffer, "Mobility Header", 128);
+  /* Generate these lines from nmap-protocols using the following perl command:
+   perl -lne'if(/^(\S+)\s*(\d+)\s*\#?\s*(.*)/){my$l=$3||$1;print qq{HDRTOA($2, "$1", "$l")}}'
+  */
+  HDRTOA(0, "hopopt", "IPv6 Hop-by-Hop Option")
+  HDRTOA(1, "icmp", "Internet Control Message")
+  HDRTOA(2, "igmp", "Internet Group Management")
+  HDRTOA(3, "ggp", "Gateway-to-Gateway")
+  HDRTOA(4, "ipv4", "IP in IP (encapsulation)")
+  HDRTOA(5, "st", "Stream")
+  HDRTOA(6, "tcp", "Transmission Control")
+  HDRTOA(7, "cbt", "CBT")
+  HDRTOA(8, "egp", "Exterior Gateway Protocol")
+  HDRTOA(9, "igp", "any private interior gateway")
+  HDRTOA(10, "bbn-rcc-mon", "BBN RCC Monitoring")
+  HDRTOA(11, "nvp-ii", "Network Voice Protocol")
+  HDRTOA(12, "pup", "PARC universal packet protocol")
+  HDRTOA(13, "argus", "ARGUS")
+  HDRTOA(14, "emcon", "EMCON")
+  HDRTOA(15, "xnet", "Cross Net Debugger")
+  HDRTOA(16, "chaos", "Chaos")
+  HDRTOA(17, "udp", "User Datagram")
+  HDRTOA(18, "mux", "Multiplexing")
+  HDRTOA(19, "dcn-meas", "DCN Measurement Subsystems")
+  HDRTOA(20, "hmp", "Host Monitoring")
+  HDRTOA(21, "prm", "Packet Radio Measurement")
+  HDRTOA(22, "xns-idp", "XEROX NS IDP")
+  HDRTOA(23, "trunk-1", "Trunk-1")
+  HDRTOA(24, "trunk-2", "Trunk-2")
+  HDRTOA(25, "leaf-1", "Leaf-1")
+  HDRTOA(26, "leaf-2", "Leaf-2")
+  HDRTOA(27, "rdp", "Reliable Data Protocol")
+  HDRTOA(28, "irtp", "Internet Reliable Transaction")
+  HDRTOA(29, "iso-tp4", "ISO Transport Protocol Class 4")
+  HDRTOA(30, "netblt", "Bulk Data Transfer Protocol")
+  HDRTOA(31, "mfe-nsp", "MFE Network Services Protocol")
+  HDRTOA(32, "merit-inp", "MERIT Internodal Protocol")
+  HDRTOA(33, "dccp", "Datagram Congestion Control Protocol")
+  HDRTOA(34, "3pc", "Third Party Connect Protocol")
+  HDRTOA(35, "idpr", "Inter-Domain Policy Routing Protocol")
+  HDRTOA(36, "xtp", "XTP")
+  HDRTOA(37, "ddp", "Datagram Delivery Protocol")
+  HDRTOA(38, "idpr-cmtp", "IDPR Control Message Transport Proto")
+  HDRTOA(39, "tp++", "TP+")
+  HDRTOA(40, "il", "IL Transport Protocol")
+  HDRTOA(41, "ipv6", "Ipv6")
+  HDRTOA(42, "sdrp", "Source Demand Routing Protocol")
+  HDRTOA(43, "ipv6-route", "Routing Header for IPv6")
+  HDRTOA(44, "ipv6-frag", "Fragment Header for IPv6")
+  HDRTOA(45, "idrp", "Inter-Domain Routing Protocol")
+  HDRTOA(46, "rsvp", "Reservation Protocol")
+  HDRTOA(47, "gre", "General Routing Encapsulation")
+  HDRTOA(48, "dsp", "Dynamic Source Routing Protocol. Historically MHRP")
+  HDRTOA(49, "bna", "BNA")
+  HDRTOA(50, "esp", "Encap Security Payload")
+  HDRTOA(51, "ah", "Authentication Header")
+  HDRTOA(52, "i-nlsp", "Integrated Net Layer Security  TUBA")
+  HDRTOA(53, "swipe", "IP with Encryption")
+  HDRTOA(54, "narp", "NBMA Address Resolution Protocol")
+  HDRTOA(55, "mobile", "IP Mobility")
+  HDRTOA(56, "tlsp", "Transport Layer Security Protocol using Kryptonet key management")
+  HDRTOA(57, "skip", "SKIP")
+  HDRTOA(58, "ipv6-icmp", "ICMP for IPv6")
+  HDRTOA(59, "ipv6-nonxt", "No Next Header for IPv6")
+  HDRTOA(60, "ipv6-opts", "Destination Options for IPv6")
+  HDRTOA(61, "anyhost", "any host internal protocol")
+  HDRTOA(62, "cftp", "CFTP")
+  HDRTOA(63, "anylocalnet", "any local network")
+  HDRTOA(64, "sat-expak", "SATNET and Backroom EXPAK")
+  HDRTOA(65, "kryptolan", "Kryptolan")
+  HDRTOA(66, "rvd", "MIT Remote Virtual Disk Protocol")
+  HDRTOA(67, "ippc", "Internet Pluribus Packet Core")
+  HDRTOA(68, "anydistribfs", "any distributed file system")
+  HDRTOA(69, "sat-mon", "SATNET Monitoring")
+  HDRTOA(70, "visa", "VISA Protocol")
+  HDRTOA(71, "ipcv", "Internet Packet Core Utility")
+  HDRTOA(72, "cpnx", "Computer Protocol Network Executive")
+  HDRTOA(73, "cphb", "Computer Protocol Heart Beat")
+  HDRTOA(74, "wsn", "Wang Span Network")
+  HDRTOA(75, "pvp", "Packet Video Protocol")
+  HDRTOA(76, "br-sat-mon", "Backroom SATNET Monitoring")
+  HDRTOA(77, "sun-nd", "SUN ND PROTOCOL-Temporary")
+  HDRTOA(78, "wb-mon", "WIDEBAND Monitoring")
+  HDRTOA(79, "wb-expak", "WIDEBAND EXPAK")
+  HDRTOA(80, "iso-ip", "ISO Internet Protocol")
+  HDRTOA(81, "vmtp", "VMTP")
+  HDRTOA(82, "secure-vmtp", "SECURE-VMTP")
+  HDRTOA(83, "vines", "VINES")
+  HDRTOA(84, "iptm", "Internet Protocol Traffic Manager. Historically TTP")
+  HDRTOA(85, "nsfnet-igp", "NSFNET-IGP")
+  HDRTOA(86, "dgp", "Dissimilar Gateway Protocol")
+  HDRTOA(87, "tcf", "TCF")
+  HDRTOA(88, "eigrp", "EIGRP")
+  HDRTOA(89, "ospfigp", "OSPFIGP")
+  HDRTOA(90, "sprite-rpc", "Sprite RPC Protocol")
+  HDRTOA(91, "larp", "Locus Address Resolution Protocol")
+  HDRTOA(92, "mtp", "Multicast Transport Protocol")
+  HDRTOA(93, "ax.25", "AX.")
+  HDRTOA(94, "ipip", "IP-within-IP Encapsulation Protocol")
+  HDRTOA(95, "micp", "Mobile Internetworking Control Pro.")
+  HDRTOA(96, "scc-sp", "Semaphore Communications Sec.")
+  HDRTOA(97, "etherip", "Ethernet-within-IP Encapsulation")
+  HDRTOA(98, "encap", "Encapsulation Header")
+  HDRTOA(99, "anyencrypt", "any private encryption scheme")
+  HDRTOA(100, "gmtp", "GMTP")
+  HDRTOA(101, "ifmp", "Ipsilon Flow Management Protocol")
+  HDRTOA(102, "pnni", "PNNI over IP")
+  HDRTOA(103, "pim", "Protocol Independent Multicast")
+  HDRTOA(104, "aris", "ARIS")
+  HDRTOA(105, "scps", "SCPS")
+  HDRTOA(106, "qnx", "QNX")
+  HDRTOA(107, "a/n", "Active Networks")
+  HDRTOA(108, "ipcomp", "IP Payload Compression Protocol")
+  HDRTOA(109, "snp", "Sitara Networks Protocol")
+  HDRTOA(110, "compaq-peer", "Compaq Peer Protocol")
+  HDRTOA(111, "ipx-in-ip", "IPX in IP")
+  HDRTOA(112, "vrrp", "Virtual Router Redundancy Protocol")
+  HDRTOA(113, "pgm", "PGM Reliable Transport Protocol")
+  HDRTOA(114, "any0hop", "any 0-hop protocol")
+  HDRTOA(115, "l2tp", "Layer Two Tunneling Protocol")
+  HDRTOA(116, "ddx", "D-II Data Exchange")
+  HDRTOA(117, "iatp", "Interactive Agent Transfer Protocol")
+  HDRTOA(118, "stp", "Schedule Transfer Protocol")
+  HDRTOA(119, "srp", "SpectraLink Radio Protocol")
+  HDRTOA(120, "uti", "UTI")
+  HDRTOA(121, "smp", "Simple Message Protocol")
+  HDRTOA(122, "sm", "Simple Multicast Protocol")
+  HDRTOA(123, "ptp", "Performance Transparency Protocol")
+  HDRTOA(124, "isis-ipv4", "ISIS over IPv4")
+  HDRTOA(125, "fire", "fire")
+  HDRTOA(126, "crtp", "Combat Radio Transport Protocol")
+  HDRTOA(127, "crudp", "Combat Radio User Datagram")
+  HDRTOA(128, "sscopmce", "sscopmce")
+  HDRTOA(129, "iplt", "iplt")
+  HDRTOA(130, "sps", "Secure Packet Shield")
+  HDRTOA(131, "pipe", "Private IP Encapsulation within IP")
+  HDRTOA(132, "sctp", "Stream Control Transmission Protocol")
+  HDRTOA(133, "fc", "Fibre Channel")
+  HDRTOA(134, "rsvp-e2e-ignore", "rsvp-e2e-ignore")
+  HDRTOA(135, "mobility-hdr", "Mobility Header")
+  HDRTOA(136, "udplite", "UDP-Lite [RFC3828]")
+  HDRTOA(137, "mpls-in-ip", "MPLS-in-IP [RFC4023]")
+  HDRTOA(138, "manet", "MANET Protocols [RFC5498]")
+  HDRTOA(139, "hip", "Host Identity Protocol")
+  HDRTOA(140, "shim6", "Shim6 Protocol [RFC5533]")
+  HDRTOA(141, "wesp", "Wrapped Encapsulating Security Payload")
+  HDRTOA(142, "rohc", "Robust Header Compression")
+  HDRTOA(143, "ethernet", "RFC 8986 Ethernet next-header")
+  HDRTOA(144, "aggfrag", "AGGFRAG encapsulation payload for ESP [draft-ietf-ipsecme-iptfs-18]")
+  HDRTOA(253, "experimental1", "Use for experimentation and testing")
+  HDRTOA(254, "experimental2", "Use for experimentation and testing")
+  default:
+    strncpy(buffer, acronym ? "unknown" : "Unknown protocol", 128);\
     break;
 
   } /* End of switch */
@@ -2445,11 +2386,14 @@ const char *ippackethdrinfo(const u8 *packet, u32 len, int detail) {
       Snprintf(protoinfo, sizeof(protoinfo), "TCP %s:?? > %s:?? ?? %s (incomplete)",
           srchost, dsthost, ipinfo);
     }
+    /* For all cases after this, datalen is necessarily >= 8 and frag_off is <= 8 */
 
     /* CASE 2: where we are missing the first 8 bytes of the TCP header but we
      * have, at least, the next 8 bytes so we can see the ACK number, the
      * flags and window size. */
-    else if (frag_off == 8 && datalen >= 8) {
+    else if (frag_off > 0) {
+      /* Fragmentation is on 8-byte boundaries, so 8 is the only legal value here. */
+      assert(frag_off == 8);
       tcp = (struct tcp_hdr *)((u8 *) tcp - frag_off); // ugly?
 
       /* TCP Flags */
@@ -2488,8 +2432,7 @@ const char *ippackethdrinfo(const u8 *packet, u32 len, int detail) {
       }
 
       /* Create a string with TCP information relevant to the specified level of detail */
-      if (detail == LOW_DETAIL) {
-        Snprintf(protoinfo, sizeof(protoinfo), "TCP %s:?? > %s:?? %s %s %s %s",
+      if (detail == LOW_DETAIL) { Snprintf(protoinfo, sizeof(protoinfo), "TCP %s:?? > %s:?? %s %s %s %s",
           srchost, dsthost, tflags, ipinfo, tcpinfo, tcpoptinfo);
       } else if (detail == MEDIUM_DETAIL) {
         Snprintf(protoinfo, sizeof(protoinfo), "TCP %s:?? > %s:?? %s ack=%lu win=%hu %s IP [%s]",
@@ -2514,25 +2457,21 @@ const char *ippackethdrinfo(const u8 *packet, u32 len, int detail) {
         }
       }
     }
+    /* For all cases after this, frag_off is necessarily 0 */
 
     /* CASE 3: where the IP packet is not a fragment but for some reason, we
      * don't have the entire TCP header, just part of it.*/
-    else if (datalen > 0 && datalen < 20) {
-      /* We only have the first 32 bits: source and dst port */
-      if (datalen >= 4 && datalen < 8) {
-        Snprintf(protoinfo, sizeof(protoinfo), "TCP %s:%hu > %s:%hu ?? (incomplete) %s",
-          srchost, (unsigned short) ntohs(tcp->th_sport), dsthost, (unsigned short) ntohs(tcp->th_dport), ipinfo);
-      }
-
+    else if (datalen < 20) {
+      /* We know we have the first 8 bytes, so what's left? */
       /* We only have the first 64 bits: ports and seq number */
-      if (datalen >= 8 && datalen < 12) {
+      if (datalen < 12) {
         Snprintf(tcpinfo, sizeof(tcpinfo), "TCP %s:%hu > %s:%hu ?? seq=%lu (incomplete) %s",
           srchost, (unsigned short) ntohs(tcp->th_sport), dsthost,
           (unsigned short) ntohs(tcp->th_dport), (unsigned long) ntohl(tcp->th_seq), ipinfo);
       }
 
       /* We only have the first 96 bits: ports, seq and ack number */
-      if (datalen >= 12 && datalen < 16) {
+      else if (datalen < 16) {
         if (detail == LOW_DETAIL) { /* We don't print ACK in low detail */
           Snprintf(tcpinfo, sizeof(tcpinfo), "TCP %s:%hu > %s:%hu seq=%lu (incomplete), %s",
             srchost, (unsigned short) ntohs(tcp->th_sport), dsthost,
@@ -2545,8 +2484,8 @@ const char *ippackethdrinfo(const u8 *packet, u32 len, int detail) {
         }
       }
 
-      /* We are missing the last 32 bits (checksum and urgent pointer) */
-      if (datalen >= 16 && datalen < 20) {
+      /* We are missing some part of the last 32 bits (checksum and urgent pointer) */
+      else {
         p = tflags;
         /* These are basically in tcpdump order */
         if (tcp->th_flags & TH_SYN)
@@ -2598,7 +2537,7 @@ const char *ippackethdrinfo(const u8 *packet, u32 len, int detail) {
 
     /* CASE 4: where we (finally!) have a full 20 byte TCP header so we can
      * safely print all fields */
-    else if (datalen >= 20) {
+    else { /* if (datalen >= 20) */
 
       /* TCP Flags */
       p = tflags;
@@ -2660,11 +2599,6 @@ const char *ippackethdrinfo(const u8 *packet, u32 len, int detail) {
           (tcpoptinfo[0]!='\0') ? " " : "",
           tcpoptinfo, ipinfo);
       }
-    } else{
-      /* If the packet does not fall into any other category, then we have a
-         really screwed-up packet. */
-      Snprintf(protoinfo, sizeof(protoinfo), "TCP %s:?? > %s:?? ?? %s (invalid TCP)",
-        srchost, dsthost, ipinfo);
     }
 
     /* UDP INFORMATION ***********************************************************/
@@ -3263,7 +3197,8 @@ static int route_dst_netlink(const struct sockaddr_storage *dst,
   len -= NLMSG_LENGTH(sizeof(*nlmsg));
 
   /* See rtnetlink(7). Anything matching this route is actually unroutable. */
-  if (rtmsg->rtm_type == RTN_UNREACHABLE)
+  if (rtmsg->rtm_type == RTN_UNREACHABLE || rtmsg->rtm_type == RTN_UNSPEC
+    || rtmsg->rtm_type == RTN_BLACKHOLE || rtmsg->rtm_type == RTN_PROHIBIT)
     return 0;
 
   /* Default values to be possibly overridden. */
@@ -3287,7 +3222,8 @@ static int route_dst_netlink(const struct sockaddr_storage *dst,
 
       intf_index = *(int *) RTA_DATA(rtattr);
       p = if_indextoname(intf_index, namebuf);
-      assert(p != NULL);
+      if (p == NULL)
+        netutil_fatal("%s: if_indextoname(%d) failed: %d (%s)", __func__, intf_index, errno, strerror(errno));
       ii = getInterfaceByName(namebuf, dst->ss_family);
       if (ii == NULL)
         ii = getInterfaceByName(namebuf, AF_UNSPEC);
@@ -3593,16 +3529,27 @@ int Sendto(const char *functionname, int sd,
 }
 
 
+int netutil_eth_can_send(const netutil_eth_t *e) {
+  switch (netutil_eth_datalink(e)) {
+    case DLT_NULL:
+    case DLT_EN10MB:
+    case DLT_RAW:
+      return 1;
+      break;
+    default:
+      return 0;
+      break;
+  }
+}
 
 /* Send an IP packet over an ethernet handle. */
-int send_ip_packet_eth(const struct eth_nfo *eth, const u8 *packet, unsigned int packetlen) {
-  eth_t *ethsd;
-  u8 *eth_frame;
+static int send_ip_packet_eth(const struct eth_nfo *eth, const u8 *packet, unsigned int packetlen, int af) {
+  netutil_eth_t *ethsd;
+  u8 *eth_frame = NULL;
   int res;
+  size_t framelen;
+  uint16_t ethertype = (af == AF_INET6 ? ETH_TYPE_IPV6 : ETH_TYPE_IP);
 
-  eth_frame = (u8 *) safe_malloc(14 + packetlen);
-  memcpy(eth_frame + 14, packet, packetlen);
-  eth_pack_hdr(eth_frame, eth->dstmac, eth->srcmac, ETH_TYPE_IP);
   if (!eth->ethsd) {
     ethsd = eth_open_cached(eth->devname);
     if (!ethsd)
@@ -3610,9 +3557,42 @@ int send_ip_packet_eth(const struct eth_nfo *eth, const u8 *packet, unsigned int
   } else {
     ethsd = eth->ethsd;
   }
-  res = eth_send(ethsd, eth_frame, 14 + packetlen);
+  switch (ethsd->datalink) {
+    case DLT_EN10MB:
+      framelen = 14 + packetlen;
+      eth_frame = (u8 *) safe_malloc(framelen);
+      memcpy(eth_frame + 14, packet, packetlen);
+      eth_pack_hdr(eth_frame, eth->dstmac, eth->srcmac, ethertype);
+      break;
+    case DLT_NULL:
+      framelen = 4 + packetlen;
+      eth_frame = (u8 *) safe_malloc(framelen);
+      memcpy(eth_frame + 4, packet, packetlen);
+      if (af == AF_INET6) {
+        /* These values are per libpcap/gencode.c */
+#if defined(__APPLE__)
+        *(uint32_t *)eth_frame = 30; // macOS, iOS, other Darwin-based OSes
+#elif defined(__FreeBSD__)
+        *(uint32_t *)eth_frame = 28; // FreeBSD
+#else
+        *(uint32_t *)eth_frame = 24; // NetBSD, OpenBSD, BSD/OS, Npcap
+#endif
+      }
+      else {
+        *(uint32_t *)eth_frame = AF_INET;
+      }
+      break;
+    case DLT_RAW:
+      framelen = packetlen;
+      break;
+    default:
+      netutil_fatal("%s: unsupported DLT for %s: %d", __func__, eth->devname, ethsd->datalink);
+      break;
+  }
+  res = netutil_eth_send(ethsd, eth_frame ? eth_frame : packet, framelen);
   /* No need to close ethsd due to caching */
-  free(eth_frame);
+  if (eth_frame != packet)
+    free(eth_frame);
 
   return res;
 }
@@ -3676,7 +3656,7 @@ int send_ip_packet_eth_or_sd(int sd, const struct eth_nfo *eth,
   const struct sockaddr_in *dst,
   const u8 *packet, unsigned int packetlen) {
   if(eth)
-    return send_ip_packet_eth(eth, packet, packetlen);
+    return send_ip_packet_eth(eth, packet, packetlen, AF_INET);
   else
     return send_ip_packet_sd(sd, dst, packet, packetlen);
 }
@@ -3733,7 +3713,7 @@ int send_frag_ip_packet(int sd, const struct eth_nfo *eth,
 
 /* There are three ways to send a raw IPv6 packet.
 
-   send_ipv6_eth works when the device is Ethernet. (Unfortunately IPv6-in-IPv4
+   send_ip_packet_eth works when the device is Ethernet. (Unfortunately IPv6-in-IPv4
    tunnels are not.) We can control all header fields and extension headers.
 
    send_ipv6_ipproto_raw must be used when IPPROTO_RAW sockets include the IP
@@ -3747,31 +3727,6 @@ int send_frag_ip_packet(int sd, const struct eth_nfo *eth,
    except for the flow label. This method needs one raw socket for every
    protocol. (More precisely, one socket per distinct Next Header value.)
 */
-
-/* Send an IPv6 packet over an Ethernet handle. */
-static int send_ipv6_eth(const struct eth_nfo *eth, const u8 *packet, unsigned int packetlen) {
-  eth_t *ethsd;
-  struct eth_hdr *eth_frame;
-  u8 *copy;
-  int res;
-
-  copy = (u8 *) safe_malloc(packetlen + sizeof(*eth_frame));
-  memcpy(copy + sizeof(*eth_frame), packet, packetlen);
-  eth_frame = (struct eth_hdr *) copy;
-  eth_pack_hdr(eth_frame, eth->dstmac, eth->srcmac, ETH_TYPE_IPV6);
-  if (!eth->ethsd) {
-    ethsd = eth_open_cached(eth->devname);
-    if (!ethsd)
-      netutil_fatal("%s: Failed to open ethernet device (%s)", __func__, eth->devname);
-  } else {
-    ethsd = eth->ethsd;
-  }
-  res = eth_send(ethsd, eth_frame, sizeof(*eth_frame) + packetlen);
-  /* No need to close ethsd due to caching */
-  free(eth_frame);
-
-  return res;
-}
 
 #if HAVE_IPV6_IPPROTO_RAW
 
@@ -3982,7 +3937,7 @@ bail:
 int send_ipv6_packet_eth_or_sd(int sd, const struct eth_nfo *eth,
   const struct sockaddr_in6 *dst, const u8 *packet, unsigned int packetlen) {
   if (eth != NULL) {
-    return send_ipv6_eth(eth, packet, packetlen);
+    return send_ip_packet_eth(eth, packet, packetlen, AF_INET6);
   } else {
 #if HAVE_IPV6_IPPROTO_RAW
     return send_ipv6_ipproto_raw(dst, packet, packetlen);
@@ -4047,7 +4002,7 @@ int DnetName2PcapName(const char *dnetdev, char *pcapdev, int pcapdevlen) {
   // OK, so it isn't in the cache.  Let's ask dnet for it.
   /* Converts a dnet interface name (ifname) to its pcap equivalent, which is stored in
   pcapdev (up to a length of pcapdevlen).  Returns 1 and fills in pcapdev if successful. */
-  if (eth_get_pcap_devname(dnetdev, tmpdev, sizeof(tmpdev)) != 0) {
+  if (intf_get_pcap_devname(dnetdev, tmpdev, sizeof(tmpdev)) != 0) {
       // We've got it.  Let's add it to the not found cache
       if (NNFCsz >= NNFCcapacity) {
         NNFCcapacity <<= 2;
@@ -4188,13 +4143,83 @@ void set_pcap_filter(const char *device, pcap_t *pd, const char *bpf, ...) {
    datalink types DLT_EN10MB and DLT_LINUX_SLL. Returns -1 on error. */
 int datalink_offset(int datalink)
 {
-  if (datalink == DLT_EN10MB)
-    return ETH_HDR_LEN;
-  else if (datalink == DLT_LINUX_SLL)
-    /* The datalink type is Linux "cooked" sockets. See pcap-linktype(7). */
-    return 16;
-  else
-    return -1;
+  int offset = -1;
+  /* NOTE: IF A NEW OFFSET EVER EXCEEDS THE CURRENT MAX (24), ADJUST
+     MAX_LINK_HEADERSZ in libnetutil/netutil.h */
+  switch (datalink) {
+  case DLT_EN10MB:
+    offset = ETH_HDR_LEN;
+    break;
+  case DLT_IEEE802:
+    offset = 22;
+    break;
+#ifdef __amigaos__
+  case DLT_MIAMI:
+    offset = 16;
+    break;
+#endif
+#ifdef DLT_LOOP
+  case DLT_LOOP:
+#endif
+  case DLT_NULL:
+    offset = 4;
+    break;
+  case DLT_SLIP:
+#ifdef DLT_SLIP_BSDOS
+  case DLT_SLIP_BSDOS:
+#endif
+#if (FREEBSD || OPENBSD || NETBSD || BSDI || MACOSX)
+    offset = 16;
+#else
+    offset = 24; /* Anyone use this??? */
+#endif
+    break;
+  case DLT_PPP:
+#ifdef DLT_PPP_BSDOS
+  case DLT_PPP_BSDOS:
+#endif
+#ifdef DLT_PPP_SERIAL
+  case DLT_PPP_SERIAL:
+#endif
+#ifdef DLT_PPP_ETHER
+  case DLT_PPP_ETHER:
+#endif
+#if (FREEBSD || OPENBSD || NETBSD || BSDI || MACOSX)
+    offset = 4;
+#else
+#ifdef SOLARIS
+    offset = 8;
+#else
+    offset = 24; /* Anyone use this? */
+#endif /* ifdef solaris */
+#endif /* if freebsd || openbsd || netbsd || bsdi */
+    break;
+  case DLT_RAW:
+    offset = 0;
+    break;
+  case DLT_FDDI:
+    offset = 21;
+    break;
+#ifdef DLT_ENC
+  case DLT_ENC:
+    offset = 12;
+    break;
+#endif /* DLT_ENC */
+#ifdef DLT_LINUX_SLL
+  case DLT_LINUX_SLL:
+    offset = 16;
+    break;
+#endif
+#ifdef DLT_IPNET
+  case DLT_IPNET:
+    offset = 24;
+    break;
+#endif
+  default:
+    offset = -1;
+    break;
+  }
+  return offset;
 }
 
 /* Common subroutine for reading ARP and NS responses. Input parameters are pd,
@@ -4202,9 +4227,9 @@ int datalink_offset(int datalink)
    then the output parameters p, head, rcvdtime, datalink, and offset are filled
    in, and the function returns 1. If no frame passes before the timeout, then
    the function returns 0 and the output parameters are undefined. */
-static int read_reply_pcap(pcap_t *pd, long to_usec,
+int read_reply_pcap(pcap_t *pd, long to_usec,
   bool (*accept_callback)(const unsigned char *, const struct pcap_pkthdr *, int, size_t),
-  unsigned char **p, struct pcap_pkthdr *head, struct timeval *rcvdtime,
+  const unsigned char **p, struct pcap_pkthdr **head, struct timeval *rcvdtime,
   int *datalink, size_t *offset)
 {
   static int warning = 0;
@@ -4239,6 +4264,7 @@ static int read_reply_pcap(pcap_t *pd, long to_usec,
   do {
 
     *p = NULL;
+    int pcap_status = 0;
     /* It may be that protecting this with !pcap_selectable_fd_one_to_one is not
        necessary, that it is always safe to do a nonblocking read in this way on
        all platforms. But I have only tested it on Solaris. */
@@ -4249,22 +4275,45 @@ static int read_reply_pcap(pcap_t *pd, long to_usec,
       assert(nonblock == 0);
       rc = pcap_setnonblock(pd, 1, NULL);
       assert(rc == 0);
-      *p = (u8 *) pcap_next(pd, head);
+      pcap_status = pcap_next_ex(pd, head, p);
       rc = pcap_setnonblock(pd, nonblock, NULL);
       assert(rc == 0);
     }
 
-    if (*p == NULL) {
-      /* Nonblocking pcap_next didn't get anything. */
+    if (pcap_status == PCAP_ERROR) {
+      // TODO: Gracefully end the scan.
+      netutil_fatal("Error from pcap_next_ex: %s\n", pcap_geterr(pd));
+    }
+
+    if (pcap_status == 0 || *p == NULL) {
+      /* Nonblocking pcap_next_ex didn't get anything. */
       if (pcap_select(pd, to_usec) == 0)
         timedout = 1;
       else
-        *p = (u8 *) pcap_next(pd, head);
+        pcap_status = pcap_next_ex(pd, head, p);
     }
 
-    if (*p != NULL && accept_callback(*p, head, *datalink, *offset)) {
-      break;
-    } else if (*p == NULL) {
+    if (pcap_status == PCAP_ERROR) {
+      // TODO: Gracefully end the scan.
+      netutil_fatal("Error from pcap_next_ex: %s\n", pcap_geterr(pd));
+    }
+
+    if (pcap_status == 1 && *p != NULL) {
+      /* Offset may be different in the case of 802.1q */
+      if (*datalink == DLT_EN10MB
+          && (*head)->caplen >= sizeof(struct eth_hdr)
+          && 0 == memcmp((*p) + offsetof(struct eth_hdr, eth_type), "\x81\x00", 2)) {
+        *offset += 4;
+      }
+      if (accept_callback(*p, *head, *datalink, *offset)) {
+        break;
+      } else {
+        /* We'll be a bit patient if we're getting actual packets back, but
+           not indefinitely so */
+        if (badcounter++ > 50)
+          timedout = 1;
+      }
+    } else {
       /* Should we timeout? */
       if (to_usec == 0) {
         timedout = 1;
@@ -4274,11 +4323,6 @@ static int read_reply_pcap(pcap_t *pd, long to_usec,
           timedout = 1;
         }
       }
-    } else {
-      /* We'll be a bit patient if we're getting actual packets back, but
-         not indefinitely so */
-      if (badcounter++ > 50)
-        timedout = 1;
     }
   } while (!timedout);
 
@@ -4286,19 +4330,20 @@ static int read_reply_pcap(pcap_t *pd, long to_usec,
     return 0;
 
   if (rcvdtime) {
-    // FIXME: I eventually need to figure out why Windows head.ts time is sometimes BEFORE the time I
-    // sent the packet (which is according to gettimeofday() in nbase).  For now, I will sadly have to
-    // use gettimeofday() for Windows in this case
-    // Actually I now allow .05 discrepancy.   So maybe this isn't needed.  I'll comment out for now.
-    // Nope: it is still needed at least for Windows.  Sometimes the time from he pcap header is a
+    // TODO: come up with a better way to synchronize pcap with gettimeofday.
+    // Npcap and WinPcap both suffer from clock drift relative to gettimeofday().
+    // We hope to fix this with better time sources for Npcap ( http://issues.nmap.org/1407 )
+    // and for Nmap ( http://issues.nmap.org/180 )
+    // For now, we use gettimeofday() for Windows in this case.
+    // Sometimes the time from the pcap header is a
     // COUPLE SECONDS before the gettimeofday() results :(.
 #if defined(WIN32) || defined(__amigaos__)
     gettimeofday(&tv_end, NULL);
     *rcvdtime = tv_end;
 #else
-    rcvdtime->tv_sec = head->ts.tv_sec;
-    rcvdtime->tv_usec = head->ts.tv_usec;
-    assert(head->ts.tv_sec);
+    rcvdtime->tv_sec = (*head)->ts.tv_sec;
+    rcvdtime->tv_usec = (*head)->ts.tv_usec;
+    assert((*head)->ts.tv_sec);
 #endif
   }
 
@@ -4317,7 +4362,7 @@ static bool accept_arp(const unsigned char *p, const struct pcap_pkthdr *head,
     return false;
 
   if (datalink == DLT_EN10MB) {
-    return ntohs(*((u16 *) (p + 12))) == ETH_TYPE_ARP;
+    return ntohs(*((u16 *) (p + offset - 2))) == ETH_TYPE_ARP;
   } else if (datalink == DLT_LINUX_SLL) {
     return ntohs(*((u16 *) (p + 2))) == ARPHRD_ETHER && /* sll_hatype */
       ntohs(*((u16 *) (p + 4))) == 6 && /* sll_halen */
@@ -4340,8 +4385,8 @@ int read_arp_reply_pcap(pcap_t *pd, u8 *sendermac,
                         struct in_addr *senderIP, long to_usec,
                         struct timeval *rcvdtime,
                         void (*trace_callback)(int, const u8 *, u32, struct timeval *)) {
-  unsigned char *p;
-  struct pcap_pkthdr head;
+  const unsigned char *p;
+  struct pcap_pkthdr *head;
   int datalink;
   size_t offset;
   int rc;
@@ -4366,17 +4411,13 @@ static bool accept_ns(const unsigned char *p, const struct pcap_pkthdr *head,
   int datalink, size_t offset)
 {
   struct icmpv6_hdr *icmp6_header;
-  struct icmpv6_msg_nd *na;
 
-  if (head->caplen < offset + IP6_HDR_LEN + 32)
+  if (head->caplen < offset + IP6_HDR_LEN + ICMPV6_HDR_LEN)
     return false;
 
   icmp6_header = (struct icmpv6_hdr *)(p + offset + IP6_HDR_LEN);
-  na = (struct icmpv6_msg_nd *)(p + offset + IP6_HDR_LEN + ICMPV6_HDR_LEN);
   return icmp6_header->icmpv6_type == ICMPV6_NEIGHBOR_ADVERTISEMENT &&
-    icmp6_header->icmpv6_code == 0 &&
-    na->icmpv6_option_type == 2 &&
-    na->icmpv6_option_length == 1;
+    icmp6_header->icmpv6_code == 0;
 }
 
 /* Attempts to read one IPv6/Ethernet Neighbor Solicitation reply packet from the pcap
@@ -4390,10 +4431,10 @@ static bool accept_ns(const unsigned char *p, const struct pcap_pkthdr *head,
    by Nmap only. Any other calling this should pass NULL instead. */
 int read_ns_reply_pcap(pcap_t *pd, u8 *sendermac,
                         struct sockaddr_in6 *senderIP, long to_usec,
-                        struct timeval *rcvdtime,
+                        struct timeval *rcvdtime, bool *has_mac,
                         void (*trace_callback)(int, const u8 *, u32, struct timeval *)) {
-  unsigned char *p;
-  struct pcap_pkthdr head;
+  const unsigned char *p;
+  struct pcap_pkthdr *head;
   int datalink;
   size_t offset;
   int rc;
@@ -4404,7 +4445,16 @@ int read_ns_reply_pcap(pcap_t *pd, u8 *sendermac,
     return 0;
 
   na = (struct icmpv6_msg_nd *)(p + offset + IP6_HDR_LEN + ICMPV6_HDR_LEN);
-  memcpy(sendermac, &na->icmpv6_mac, 6);
+  if (head->caplen >= ((unsigned char *)na - p) + sizeof(struct icmpv6_msg_nd) &&
+    na->icmpv6_option_type == 2 &&
+    na->icmpv6_option_length == 1) {
+    *has_mac = true;
+    memcpy(sendermac, &na->icmpv6_mac, 6);
+  }
+  else {
+    *has_mac = false;
+  }
+  senderIP->sin6_family = AF_INET6;
   memcpy(&senderIP->sin6_addr.s6_addr, &na->icmpv6_target, 16);
 
   if (trace_callback != NULL) {
@@ -4436,12 +4486,13 @@ bool doND(const char *dev, const u8 *srcmac,
   int timeouts[] = { 100000, 400000, 800000 };
   int max_sends = 3;
   int num_sends = 0; // How many we have sent so far
-  eth_t *ethsd;
+  netutil_eth_t *ethsd;
   u8 frame[ETH_HDR_LEN + IP6_HDR_LEN + ICMPV6_HDR_LEN + 4 + 16 + 8];
   struct timeval start, now, rcvdtime;
   int timeleft;
   int listenrounds;
   int rc;
+  bool has_mac;
   pcap_t *pd;
   struct sockaddr_storage rcvdIP;
   rcvdIP.ss_family = AF_INET6;
@@ -4494,7 +4545,7 @@ bool doND(const char *dev, const u8 *srcmac,
 
   while (!foundit && num_sends < max_sends) {
     /* Send the sucker */
-    rc = eth_send(ethsd, frame, sizeof(frame));
+    rc = netutil_eth_send(ethsd, frame, sizeof(frame));
     if (rc != sizeof(frame)) {
      netutil_error("WARNING: %s: eth_send of Neighbor Solicitation packet returned %u rather than expected %d bytes", __func__, rc, (int) sizeof(frame));
     }
@@ -4517,7 +4568,7 @@ bool doND(const char *dev, const u8 *srcmac,
       listenrounds++;
       /* Now listen until we reach our next timeout or get an answer */
       rc = read_ns_reply_pcap(pd, targetmac, (struct sockaddr_in6 *) &rcvdIP, timeleft,
-                               &rcvdtime, traceND_callback);
+                               &rcvdtime, &has_mac, traceND_callback);
       if (rc == -1)
         netutil_fatal("%s: Received -1 response from read_ns_reply_pcap", __func__);
       if (rc == 1) {
@@ -4555,7 +4606,7 @@ bool doArp(const char *dev, const u8 *srcmac,
   int timeouts[] = { 100000, 400000, 800000 };
   int max_sends = 3;
   int num_sends = 0; // How many we have sent so far
-  eth_t *ethsd;
+  netutil_eth_t *ethsd;
   u8 frame[ETH_HDR_LEN + ARP_HDR_LEN + ARP_ETHIP_LEN];
   const struct sockaddr_in *targetsin = (struct sockaddr_in *) targetip;
   const struct sockaddr_in *srcsin = (struct sockaddr_in *) srcip;
@@ -4591,7 +4642,7 @@ bool doArp(const char *dev, const u8 *srcmac,
 
   while (!foundit && num_sends < max_sends) {
     /* Send the sucker */
-    rc = eth_send(ethsd, frame, sizeof(frame));
+    rc = netutil_eth_send(ethsd, frame, sizeof(frame));
     if (rc != sizeof(frame)) {
      netutil_error("WARNING: %s: eth_send of ARP packet returned %u rather than expected %d bytes", __func__, rc, (int) sizeof(frame));
     }
@@ -4677,28 +4728,22 @@ size_t read_host_from_file(FILE *fp, char *buf, size_t n)
 
 
 /* Return next target host specification from the supplied stream.
- * if parameter "random" is set to true, then the function will
- * return a random, non-reserved, IP address in decimal-dot notation */
-const char *grab_next_host_spec(FILE *inputfd, bool random, int argc, const char **argv) {
+ */
+const char *grab_next_host_spec(FILE *inputfd, int argc, const char **argv) {
   static char host_spec[1024];
-  struct in_addr ip;
   size_t n;
 
-  if (random) {
-    do {
-      ip.s_addr = get_random_unique_u32();
-    } while (ip_is_reserved(&ip));
-    Strncpy(host_spec, inet_ntoa(ip), sizeof(host_spec));
-  } else if (!inputfd) {
-    return( (optind < argc)?  argv[optind++] : NULL);
-  } else {
+  if (optind < argc) {
+    return argv[optind++];
+  } else if (inputfd) {
     n = read_host_from_file(inputfd, host_spec, sizeof(host_spec));
     if (n == 0)
       return NULL;
     else if (n >= sizeof(host_spec))
       netutil_fatal("One of the host specifications from your input file is too long (>= %u chars)", (unsigned int) sizeof(host_spec));
+    return host_spec;
   }
-  return host_spec;
+  return NULL;
 }
 
 
@@ -4727,7 +4772,7 @@ int set_max_open_descriptors(int desired_max) {
 
     if (!getrlimit(flag, &r)) {
         /* If current limit is less than the desired, try to increase it */
-        if(r.rlim_cur < (rlim_t)desired_max){
+        if(r.rlim_cur != RLIM_INFINITY && r.rlim_cur < (rlim_t)desired_max){
             if(desired_max<0){
                 r.rlim_cur=r.rlim_max; /* Set maximum */
             }else{
@@ -4737,6 +4782,7 @@ int set_max_open_descriptors(int desired_max) {
                ; // netutil_debug("setrlimit(%d, %p) failed", flag, r);
             if (!getrlimit(flag, &r)) {
                 maxfds = r.rlim_cur;
+                // NOTE: This may be RLIM_INFINITY, which is -1 (~0UL) on Linux.
                 return maxfds;
             }else {
                 return 0;

@@ -180,8 +180,6 @@ if test "$have_libpcap" != "no"; then
 fi
 AC_SUBST(LIBPCAP_LIBS)
 
-PCAP_DEFINE_NETMASK_UNKNOWN
-
 AX_HAVE_EPOLL([AC_DEFINE(HAVE_EPOLL, 1, [epoll is available])], )
 AX_HAVE_POLL([AC_DEFINE(HAVE_POLL, 1, [poll is available])], )
 AC_CHECK_FUNCS(kqueue kevent, [AC_DEFINE(HAVE_KQUEUE)], )
@@ -208,6 +206,7 @@ AC_CHECK_FUNC(nanosleep, , AC_CHECK_LIB(posix4, nanosleep))
 dnl Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS(net/bpf.h sys/ioctl.h sys/un.h netdb.h)
+AC_CHECK_HEADERS([linux/vm_sockets.h], , , [#include <sys/socket.h>])
 
 # We test whether they specified openssl desires explicitly
 use_openssl="yes"
@@ -271,18 +270,6 @@ if test "$use_openssl" = "yes"; then
   OPENSSL_LIBS="-lssl -lcrypto"
   LIBS_TMP="$LIBS"
   LIBS="$OPENSSL_LIBS $LIBS"
-  AC_MSG_CHECKING([for SSL_set_tlsext_host_name])
-  AC_TRY_LINK([#include <openssl/ssl.h>], [SSL_set_tlsext_host_name(NULL, NULL)],
-    [AC_MSG_RESULT([yes]); AC_DEFINE(HAVE_SSL_SET_TLSEXT_HOST_NAME, 1, [SSL_set_tlsext_host_name available])],
-    [AC_MSG_RESULT([no])])
-  AC_MSG_CHECKING([for DTLS_client_method])
-  AC_TRY_LINK([#include <openssl/ssl.h>], [DTLS_client_method()],
-    [AC_MSG_RESULT([yes]); AC_DEFINE(HAVE_DTLS_CLIENT_METHOD, 1, [DTLS_client_method available])],
-    [AC_MSG_RESULT([no])])
-  AC_MSG_CHECKING([for SSL_set_alpn_protos])
-  AC_TRY_LINK([#include <openssl/ssl.h>], [SSL_set_alpn_protos(NULL, NULL, 0)],
-    [AC_MSG_RESULT([yes]); AC_DEFINE(HAVE_ALPN_SUPPORT, 1, [SSL ALPN protos support])],
-    [AC_MSG_RESULT([no])])
   LIBS="$LIBS_TMP"
 
 fi

@@ -1,8 +1,9 @@
-#!/bin/sh
+#!/bin/sh -e
+set -x
 
+test -n "${NMAP_VERSION}" || exit 1
 export source=$1
-export version=$(grep '^\#[ \t]*define[ \t]\+NMAP_VERSION' ../nmap.h | sed -e 's/.*"\(.*\)".*/\1/' -e 'q')
-export title="nmap-${version}"
+export title="nmap-${NMAP_VERSION}"
 export size=50000
 export backgroundPictureName="nmap.png"
 export finalDMGName="${title}.dmg"
@@ -21,7 +22,7 @@ cp ${backgroundPictureName} ${source}/.background/
 ln -s /Applications ${source}/
 
 # Ensure that we have no virtual disk currently mounted
-hdiutil detach /Volumes/${title}/ 2> /dev/null
+hdiutil detach /Volumes/${title}/ 2> /dev/null || true
 
 hdiutil create -srcfolder "${source}" -volname "${title}" -fs HFS+ -fsargs "-c c=64,a=16,e=16" -ov -format UDRW -size ${size}k pack.temp.dmg
 
@@ -59,7 +60,7 @@ echo '
 			set position of item "'${applicationName}'" of container window to {'${MPKG_POS_X}', '${MPKG_POS_Y}'}
 			set position of item "Applications" of container window to {'${APPS_POS_X}', '${APPS_POS_Y}'}
 			set position of item "'$2'" of container window to {'${README_POS_X}', '${README_POS_Y}'}
-			set position of item "'$3'" of container window to {'${COPYING_POS_X}', '${COPYING_POS_Y}'}
+			set position of item "'$3'" of container window to {'${LICENSE_POS_X}', '${LICENSE_POS_Y}'}
 			set position of item "'$4'" of container window to {'${THIRD_P_POS_X}', '${THIRD_P_POS_Y}'}
 			set position of item "'$5'" of container window to {'${LICENSES_POS_X}', '${LICENSES_POS_Y}'}
 			
@@ -68,7 +69,7 @@ echo '
 			close
 		end tell
 	end tell
-' | osascript
+' | osascript -
 
 hdiutil detach ${device}
 hdiutil convert "pack.temp.dmg" -format UDZO -imagekey zlib-level=9 -o "${finalDMGName}"

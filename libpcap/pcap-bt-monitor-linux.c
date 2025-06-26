@@ -29,9 +29,7 @@
  *
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <config.h>
 
 #include <errno.h>
 #include <stdint.h>
@@ -43,11 +41,20 @@
 
 #include "pcap/bluetooth.h"
 #include "pcap-int.h"
+#include "diag-control.h"
 
 #include "pcap-bt-monitor-linux.h"
 
 #define BT_CONTROL_SIZE 32
 #define INTERFACE_NAME "bluetooth-monitor"
+
+/*
+ * Private data.
+ * Currently contains nothing.
+ */
+struct pcap_bt_monitor {
+	int	dummy;
+};
 
 /*
  * Fields and alignment must match the declaration in the Linux kernel 3.4+.
@@ -60,14 +67,23 @@ struct hci_mon_hdr {
 } __attribute__((packed));
 
 int
-bt_monitor_findalldevs(pcap_if_t **alldevsp, char *err_str)
+bt_monitor_findalldevs(pcap_if_list_t *devlistp, char *err_str)
 {
     int         ret = 0;
 
-    if (pcap_add_if(alldevsp, INTERFACE_NAME, 0,
-               "Bluetooth Linux Monitor", err_str) < 0)
+    /*
+     * Bluetooth is a wireless technology.
+     *
+     * This is a device to monitor all Bluetooth interfaces, so
+     * there's no notion of "connected" or "disconnected", any
+     * more than there's a notion of "connected" or "disconnected"
+     * for the "any" device.
+     */
+    if (pcapint_add_dev(devlistp, INTERFACE_NAME,
+                PCAP_IF_WIRELESS|PCAP_IF_CONNECTION_STATUS_NOT_APPLICABLE,
+                "Bluetooth Linux Monitor", err_str) == NULL)
     {
-        ret = -1;
+        ret = PCAP_ERROR;
     }
 
     return ret;
@@ -101,24 +117,31 @@ bt_monitor_read(pcap_t *handle, int max_packets _U_, pcap_handler callback, u_ch
     msg.msg_controllen = BT_CONTROL_SIZE;
 
     do {
-        ret = recvmsg(handle->fd, &msg, 0);
         if (handle->break_loop)
         {
             handle->break_loop = 0;
-            return -2;
+            return PCAP_ERROR_BREAK;
         }
+        ret = recvmsg(handle->fd, &msg, 0);
     } while ((ret == -1) && (errno == EINTR));
 
     if (ret < 0) {
-        pcap_snprintf(handle->errbuf, PCAP_ERRBUF_SIZE,
-            "Can't receive packet: %s", strerror(errno));
-        return -1;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            /* Nonblocking mode, no data */
+            return 0;
+        }
+        pcapint_fmt_errmsg_for_errno(handle->errbuf, PCAP_ERRBUF_SIZE,
+            errno, "Can't receive packet");
+        return PCAP_ERROR;
     }
 
-    pkth.caplen = ret - sizeof(hdr) + sizeof(pcap_bluetooth_linux_monitor_header);
+    pkth.caplen = (bpf_u_int32)(ret - sizeof(hdr) + sizeof(pcap_bluetooth_linux_monitor_header));
     pkth.len = pkth.caplen;
 
+    // for musl libc CMSG_NXTHDR()
+DIAG_OFF_SIGN_COMPARE
     for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+DIAG_ON_SIGN_COMPARE
         if (cmsg->cmsg_level != SOL_SOCKET) continue;
 
         if (cmsg->cmsg_type == SCM_TIMESTAMP) {
@@ -130,7 +153,7 @@ bt_monitor_read(pcap_t *handle, int max_packets _U_, pcap_handler callback, u_ch
     bthdr->opcode = htons(hdr.opcode);
 
     if (handle->fcode.bf_insns == NULL ||
-        bpf_filter(handle->fcode.bf_insns, pktd, pkth.len, pkth.caplen)) {
+        pcapint_filter(handle->fcode.bf_insns, pktd, pkth.len, pkth.caplen)) {
         callback(user, &pkth, pktd);
         return 1;
     }
@@ -138,17 +161,11 @@ bt_monitor_read(pcap_t *handle, int max_packets _U_, pcap_handler callback, u_ch
 }
 
 static int
-bt_monitor_inject(pcap_t *handle, const void *buf _U_, size_t size _U_)
+bt_monitor_inject(pcap_t *handle, const void *buf _U_, int size _U_)
 {
-    pcap_snprintf(handle->errbuf, PCAP_ERRBUF_SIZE, "inject not supported yet");
-    return -1;
-}
-
-static int
-bt_monitor_setdirection(pcap_t *p, pcap_direction_t d)
-{
-    p->direction = d;
-    return 0;
+    snprintf(handle->errbuf, PCAP_ERRBUF_SIZE,
+        "Packet injection is not supported yet on Bluetooth monitor devices");
+    return PCAP_ERROR;
 }
 
 static int
@@ -173,29 +190,40 @@ bt_monitor_activate(pcap_t* handle)
         return PCAP_ERROR_RFMON_NOTSUP;
     }
 
+    /*
+     * Turn a negative snapshot value (invalid), a snapshot value of
+     * 0 (unspecified), or a value bigger than the normal maximum
+     * value, into the maximum allowed value.
+     *
+     * If some application really *needs* a bigger snapshot
+     * length, we should just increase MAXIMUM_SNAPLEN.
+     */
+    if (handle->snapshot <= 0 || handle->snapshot > MAXIMUM_SNAPLEN)
+        handle->snapshot = MAXIMUM_SNAPLEN;
+
     handle->bufsize = BT_CONTROL_SIZE + sizeof(pcap_bluetooth_linux_monitor_header) + handle->snapshot;
     handle->linktype = DLT_BLUETOOTH_LINUX_MONITOR;
 
     handle->read_op = bt_monitor_read;
     handle->inject_op = bt_monitor_inject;
-    handle->setfilter_op = install_bpf_program; /* no kernel filtering */
-    handle->setdirection_op = bt_monitor_setdirection;
+    handle->setfilter_op = pcapint_install_bpf_program; /* no kernel filtering */
+    handle->setdirection_op = NULL; /* Not implemented */
     handle->set_datalink_op = NULL; /* can't change data link type */
-    handle->getnonblock_op = pcap_getnonblock_fd;
-    handle->setnonblock_op = pcap_setnonblock_fd;
+    handle->getnonblock_op = pcapint_getnonblock_fd;
+    handle->setnonblock_op = pcapint_setnonblock_fd;
     handle->stats_op = bt_monitor_stats;
 
     handle->fd = socket(AF_BLUETOOTH, SOCK_RAW, BTPROTO_HCI);
     if (handle->fd < 0) {
-        pcap_snprintf(handle->errbuf, PCAP_ERRBUF_SIZE,
-            "Can't create raw socket: %s", strerror(errno));
+        pcapint_fmt_errmsg_for_errno(handle->errbuf, PCAP_ERRBUF_SIZE,
+            errno, "Can't create raw socket");
         return PCAP_ERROR;
     }
 
     handle->buffer = malloc(handle->bufsize);
     if (!handle->buffer) {
-        pcap_snprintf(handle->errbuf, PCAP_ERRBUF_SIZE, "Can't allocate dump buffer: %s",
-            pcap_strerror(errno));
+        pcapint_fmt_errmsg_for_errno(handle->errbuf, PCAP_ERRBUF_SIZE,
+            errno, "Can't allocate dump buffer");
         goto close_fail;
     }
 
@@ -205,15 +233,15 @@ bt_monitor_activate(pcap_t* handle)
     addr.hci_channel = HCI_CHANNEL_MONITOR;
 
     if (bind(handle->fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-        pcap_snprintf(handle->errbuf, PCAP_ERRBUF_SIZE,
-            "Can't attach to interface: %s", strerror(errno));
+        pcapint_fmt_errmsg_for_errno(handle->errbuf, PCAP_ERRBUF_SIZE,
+            errno, "Can't attach to interface");
         goto close_fail;
     }
 
     opt = 1;
     if (setsockopt(handle->fd, SOL_SOCKET, SO_TIMESTAMP, &opt, sizeof(opt)) < 0) {
-        pcap_snprintf(handle->errbuf, PCAP_ERRBUF_SIZE,
-            "Can't enable time stamp: %s", strerror(errno));
+        pcapint_fmt_errmsg_for_errno(handle->errbuf, PCAP_ERRBUF_SIZE,
+            errno, "Can't enable time stamp");
         goto close_fail;
     }
 
@@ -222,7 +250,7 @@ bt_monitor_activate(pcap_t* handle)
     return 0;
 
 close_fail:
-    pcap_cleanup_live_common(handle);
+    pcapint_cleanup_live_common(handle);
     return err;
 }
 
@@ -242,7 +270,7 @@ bt_monitor_create(const char *device, char *ebuf, int *is_ours)
     }
 
     *is_ours = 1;
-    p = pcap_create_common(ebuf, 0);
+    p = PCAP_CREATE_COMMON(ebuf, struct pcap_bt_monitor);
     if (p == NULL)
         return NULL;
 

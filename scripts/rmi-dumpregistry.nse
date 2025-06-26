@@ -10,7 +10,7 @@ objects.
 
 First it tries to determine the names of all objects bound in the
 registry, and then it tries to determine information about the
-objects, such as the the class names of the superclasses and
+objects, such as the class names of the superclasses and
 interfaces. This may, depending on what the registry is used for, give
 valuable information about the service. E.g, if the app uses JMX (Java
 Management eXtensions), you should see an object called "jmxconnector"
@@ -143,9 +143,6 @@ so-called "Custom data".
 -- |         file:/C:/CFusionMX7/runtime/../wwwroot/WEB-INF/cfform/jars/jsse.jar
 -- |         file:/C:/CFusionMX7/runtime/../wwwroot/WEB-INF/cfform/jars/oscache.jar
 -- |_        file:/C:/CFusionMX7/runtime/../wwwroot/WEB-INF/cfform/jars/
---
---
---@version 0.5
 
 author = "Martin Holst Swende"
 license = "Same as Nmap--See https://nmap.org/book/man-legal.html"
@@ -171,14 +168,17 @@ local function split(str, sep)
   return fields
 end
 
-
---This is a customData formatter. In some cases, the RMI library finds 'custom data' which belongs to an object.
--- This data is not handled correctly, instead, the data is dumped in the objects customData field (which is a table with strings)
--- The RMI library does not do anything more than that - however, here in the land of rmi-dumpregistry land, we may have
--- more knowledge about how to interpret that data.
--- In the wild, coldfusion.flex.rmi.DataServicesCFProxyServer_Stub e.g discloses the classpath in this variable. This method looks at
--- the contents of the custom data. if it looks like a class path, we display it as such. This method is passed to the toTable() method
--- of the returned RMI object.
+---This is a customData formatter. In some cases, the RMI library finds "custom
+-- data" that belongs to an object. This data is not handled correctly; it is
+-- instead dumped into the object's customData field (which is a table with
+-- strings).
+-- The RMI library does not do anything more than that. However, here, in the
+-- land of rmi-dumpregistry, we may have more knowledge about how to interpret
+-- that data. For example, coldfusion.flex.rmi.DataServicesCFProxyServer_Stub
+-- discloses the classpath in this variable.
+-- This method looks at the contents of the custom data and if it looks like
+-- a class path, we display it as such. This method is passed to the toTable()
+-- method of the returned RMI object.
 -- @return title, data
 function customDataFormatter(className, customData)
   if customData == nil then return nil end

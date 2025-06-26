@@ -28,7 +28,7 @@ OBJS = $(OBJDIR)\grammar.obj    $(OBJDIR)\scanner.obj  $(OBJDIR)\pcap.obj     &
        $(OBJDIR)\bpf_filter.obj $(OBJDIR)\bpf_imag.obj $(OBJDIR)\bpf_dump.obj &
        $(OBJDIR)\etherent.obj   $(OBJDIR)\gencode.obj  $(OBJDIR)\nametoad.obj &
        $(OBJDIR)\pcap-dos.obj   $(OBJDIR)\pktdrvr.obj  $(OBJDIR)\optimize.obj &
-       $(OBJDIR)\savefile.obj   $(OBJDIR)\inet.obj     $(OBJDIR)\ndis2.obj
+       $(OBJDIR)\savefile.obj   $(OBJDIR)\ndis2.obj
 
 CFLAGS = $(DEFS) $(YYDEFS) -I. -I$(%watt_root)\inc -I.\msdos\pm_drvr &
          -$(MODEL) -mf -zff -zgf -zq -bt=dos -fr=nul -w6 -fpi        &
@@ -52,8 +52,8 @@ $(OBJDIR)\pktdrvr.obj: msdos\pkt_stub.inc msdos\pktdrvr.c &
   pcap-dos.h pcap-int.h pcap.h msdos\pktdrvr.h
           *$(CC) $(CFLAGS) msdos\pktdrvr.c -fo=$@
 
-$(OBJDIR)\bpf_filter.obj: bpf\net\bpf_filter.c
-          *$(CC) $(CFLAGS) bpf\net\bpf_filter.c -fo=$@
+$(OBJDIR)\bpf_filter.obj: bpf_filter.c
+          *$(CC) $(CFLAGS) bpf_filter.c -fo=$@
 
 $(OBJDIR)\ndis2.obj: msdos\ndis2.c
           *$(CC) $(CFLAGS) msdos\ndis2.c -fo=$@
@@ -94,7 +94,7 @@ clean realclean vclean: .SYMBOLIC
 #
 # dependencies
 #
-$(OBJDIR)\bpf_filter.obj: bpf\net\bpf_filter.c pcap-int.h pcap.h pcap-bpf.h
+$(OBJDIR)\bpf_filter.obj: bpf_filter.c pcap-int.h pcap.h pcap-bpf.h
 
 $(OBJDIR)\bpf_imag.obj: bpf_imag.c pcap-int.h pcap.h pcap-bpf.h
 
@@ -107,8 +107,6 @@ $(OBJDIR)\optimize.obj: optimize.c pcap-int.h pcap.h pcap-bpf.h gencode.h
 $(OBJDIR)\savefile.obj: savefile.c pcap-int.h pcap.h pcap-bpf.h
 
 $(OBJDIR)\pcap.obj: pcap.c pcap-dos.h pcap-int.h pcap.h pcap-bpf.h
-
-$(OBJDIR)\inet.obj: inet.c pcap-int.h pcap.h pcap-bpf.h
 
 $(OBJDIR)\grammar.obj: grammar.c pcap-int.h pcap.h pcap-bpf.h gencode.h &
   pcap-namedb.h

@@ -19,12 +19,12 @@
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <config.h>
 
 #include <pcap.h>
 #include <stdio.h>
+
+#include "optimize.h"
 
 void
 bpf_dump(const struct bpf_program *p, int option)
@@ -50,8 +50,7 @@ bpf_dump(const struct bpf_program *p, int option)
 	}
 	for (i = 0; i < n; ++insn, ++i) {
 #ifdef BDEBUG
-		extern int bids[];
-		if (bids[i] > 0)
+		if (i < NBIDS && bids[i] > 0)
 			printf("[%02d]", bids[i] - 1);
 		else
 			printf(" -- ");

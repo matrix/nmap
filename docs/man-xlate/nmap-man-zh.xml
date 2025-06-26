@@ -7,6 +7,8 @@
   <refmeta>
     <refentrytitle>nmap</refentrytitle>
     <manvolnum>1</manvolnum>
+    <refmiscinfo class="source">Nmap</refmiscinfo>
+    <refmiscinfo class="manual">Nmap参考指南</refmiscinfo>
   </refmeta>
   <refnamediv id="man-name">
     <refname>nmap</refname>
@@ -152,7 +154,7 @@ PORT SPECIFICATION AND SCAN ORDER:
   -p &lt;port ranges&gt;: Only scan specified ports
     Ex: -p22; -p1-65535; -p U:53,111,137,T:21-25,80,139,8080
   -F: Fast - Scan only the ports listed in the nmap-services file)
-  -r: Scan ports consecutively - don't randomize
+  -r: Scan ports sequentially - don't randomize
 SERVICE/VERSION DETECTION:
   -sV: Probe open ports to determine service/version info
   --version-light: Limit to most likely probes for faster identification
@@ -164,8 +166,8 @@ OS DETECTION:
   --osscan-guess: Guess OS more aggressively
 TIMING AND PERFORMANCE:
   -T[0-6]: Set timing template (higher is faster)
-  --min-hostgroup/max-hostgroup &lt;msec&gt;: Parallel host scan group sizes
-  --min-parallelism/max-parallelism &lt;msec&gt;: Probe parallelization
+  --min-hostgroup/max-hostgroup &lt;size&gt;: Parallel host scan group sizes
+  --min-parallelism/max-parallelism &lt;numprobes&gt;: Probe parallelization
   --min-rtt-timeout/max-rtt-timeout/initial-rtt-timeout &lt;msec&gt;: Specifies
       probe round trip time.
   --host-timeout &lt;msec&gt;: Give up on target after this long
@@ -1388,9 +1390,9 @@ Nmap用<option>-b</option>选项支持ftp弹跳扫描。参数格式是
 
       <varlistentry>
         <term>
-        <option>--min-hostgroup &lt;milliseconds&gt;</option>; 
+        <option>--min-hostgroup &lt;size&gt;</option>; 
         <option>--max-hostgroup
-        &lt;milliseconds&gt;</option> (调整并行扫描组的大小)</term>
+        &lt;size&gt;</option> (调整并行扫描组的大小)</term>
         <listitem>
 <para>Nmap具有并行扫描多主机端口或版本的能力，Nmap将多个目标IP地址
 空间分成组，然后在同一时间对一个组进行扫描。通常，大的组更有效。缺
@@ -1418,9 +1420,9 @@ Nmap用<option>-b</option>选项支持ftp弹跳扫描。参数格式是
 
       <varlistentry>
         <term>
-        <option>--min-parallelism &lt;milliseconds&gt;</option>;
+        <option>--min-parallelism &lt;numprobes&gt;</option>;
         <option>--max-parallelism
-        &lt;milliseconds&gt;</option> (调整探测报文的并行度)</term>
+        &lt;numprobes&gt;</option> (调整探测报文的并行度)</term>
         <listitem>
 
 <para>这些选项控制用于主机组的探测报文数量，可用于端口扫描和主机发现。默认状态下，
@@ -2311,7 +2313,7 @@ rttvar: 14987 to: 100000</computeroutput>。如果对某行输出不明白，
     <para>和作者一样，Nmap也不是完美的，但可以通过发送Bug报告甚至编写
     补丁使其更加完善。如果Nmap不能满足要求，首先从<ulink url="https://nmap.org/"/>
     升级最新版本。如果总问题仍然存在，需要进行调查以确定问题是否
-    已经被解决。在<ulink url="http://seclists.org/"/>尝试搜索出错消息或
+    已经被解决。在<ulink url="https://seclists.org/"/>尝试搜索出错消息或
     浏览Nmap-dev档案，以及仔细阅读使用手册。如果问题还是不能解决，发送
     Bug报告至<email>dev@nmap.org</email>。在报告中包含所有
     有关问题的信息，以及所使用的Nmap版本、操作系统版本。问题报告以及

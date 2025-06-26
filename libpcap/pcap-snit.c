@@ -23,9 +23,7 @@
  * This module now handles the STREAMS based NIT.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <config.h>
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -53,7 +51,6 @@
 #include <netinet/tcp.h>
 #include <netinet/tcpip.h>
 
-#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -130,8 +127,8 @@ pcap_read_snit(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
 		if (cc < 0) {
 			if (errno == EWOULDBLOCK)
 				return (0);
-			pcap_snprintf(p->errbuf, sizeof(p->errbuf), "pcap_read: %s",
-				pcap_strerror(errno));
+			pcapint_fmt_errmsg_for_errno(p->errbuf, sizeof(p->errbuf),
+			    errno, "pcap_read");
 			return (-1);
 		}
 		bp = (u_char *)p->buffer;
@@ -140,6 +137,9 @@ pcap_read_snit(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
 
 	/*
 	 * loop through each snapshot in the chunk
+	 *
+	 * This assumes that a single buffer of packets will have
+	 * <= INT_MAX packets, so the packet count doesn't overflow.
 	 */
 	n = 0;
 	ep = bp + cc;
@@ -190,7 +190,7 @@ pcap_read_snit(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
 		if (caplen > p->snapshot)
 			caplen = p->snapshot;
 
-		if (bpf_filter(p->fcode.bf_insns, cp, nlp->nh_pktlen, caplen)) {
+		if (pcapint_filter(p->fcode.bf_insns, cp, nlp->nh_pktlen, caplen)) {
 			struct pcap_pkthdr h;
 			h.ts = ntp->nh_timestamp;
 			h.len = nlp->nh_pktlen;
@@ -208,7 +208,7 @@ pcap_read_snit(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
 }
 
 static int
-pcap_inject_snit(pcap_t *p, const void *buf, size_t size)
+pcap_inject_snit(pcap_t *p, const void *buf, int size)
 {
 	struct strbuf ctl, data;
 
@@ -223,8 +223,8 @@ pcap_inject_snit(pcap_t *p, const void *buf, size_t size)
 	data.len = size;
 	ret = putmsg(p->fd, &ctl, &data);
 	if (ret == -1) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "send: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "send");
 		return (-1);
 	}
 	return (ret);
@@ -247,8 +247,8 @@ nit_setflags(pcap_t *p)
 		si.ic_len = sizeof(zero);
 		si.ic_dp = (char *)&zero;
 		if (ioctl(p->fd, I_STR, (char *)&si) < 0) {
-			pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "NIOCSCHUNK: %s",
-			    pcap_strerror(errno));
+			pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+			    errno, "NIOCSCHUNK");
 			return (-1);
 		}
 	}
@@ -260,8 +260,8 @@ nit_setflags(pcap_t *p)
 		si.ic_len = sizeof(timeout);
 		si.ic_dp = (char *)&timeout;
 		if (ioctl(p->fd, I_STR, (char *)&si) < 0) {
-			pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "NIOCSTIME: %s",
-			    pcap_strerror(errno));
+			pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+			    errno, "NIOCSTIME");
 			return (-1);
 		}
 	}
@@ -272,8 +272,8 @@ nit_setflags(pcap_t *p)
 	si.ic_len = sizeof(flags);
 	si.ic_dp = (char *)&flags;
 	if (ioctl(p->fd, I_STR, (char *)&si) < 0) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "NIOCSFLAGS: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "NIOCSFLAGS");
 		return (-1);
 	}
 	return (0);
@@ -287,6 +287,7 @@ pcap_activate_snit(pcap_t *p)
 	int chunksize = CHUNKSIZE;
 	int fd;
 	static const char dev[] = "/dev/nit";
+	int err;
 
 	if (p->opt.rfmon) {
 		/*
@@ -295,6 +296,17 @@ pcap_activate_snit(pcap_t *p)
 		 */
 		return (PCAP_ERROR_RFMON_NOTSUP);
 	}
+
+	/*
+	 * Turn a negative snapshot value (invalid), a snapshot value of
+	 * 0 (unspecified), or a value bigger than the normal maximum
+	 * value, into the maximum allowed value.
+	 *
+	 * If some application really *needs* a bigger snapshot
+	 * length, we should just increase MAXIMUM_SNAPLEN.
+	 */
+	if (p->snapshot <= 0 || p->snapshot > MAXIMUM_SNAPLEN)
+		p->snapshot = MAXIMUM_SNAPLEN;
 
 	if (p->snapshot < 96)
 		/*
@@ -320,20 +332,30 @@ pcap_activate_snit(pcap_t *p)
 	if (fd < 0 && errno == EACCES)
 		p->fd = fd = open(dev, O_RDONLY);
 	if (fd < 0) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "%s: %s", dev,
-		    pcap_strerror(errno));
+		if (errno == EACCES) {
+			err = PCAP_ERROR_PERM_DENIED;
+			snprintf(p->errbuf, PCAP_ERRBUF_SIZE,
+			    "Attempt to open %s failed with EACCES - root privileges may be required",
+			    dev);
+		} else {
+			err = PCAP_ERROR;
+			pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+			    errno, "%s", dev);
+		}
 		goto bad;
 	}
 
 	/* arrange to get discrete messages from the STREAM and use NIT_BUF */
 	if (ioctl(fd, I_SRDOPT, (char *)RMSGD) < 0) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "I_SRDOPT: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "I_SRDOPT");
+		err = PCAP_ERROR;
 		goto bad;
 	}
 	if (ioctl(fd, I_PUSH, "nbuf") < 0) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "push nbuf: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "push nbuf");
+		err = PCAP_ERROR;
 		goto bad;
 	}
 	/* set the chunksize */
@@ -342,8 +364,9 @@ pcap_activate_snit(pcap_t *p)
 	si.ic_len = sizeof(chunksize);
 	si.ic_dp = (char *)&chunksize;
 	if (ioctl(fd, I_STR, (char *)&si) < 0) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "NIOCSCHUNK: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "NIOCSCHUNK");
+		err = PCAP_ERROR;
 		goto bad;
 	}
 
@@ -359,8 +382,9 @@ pcap_activate_snit(pcap_t *p)
 		 * Is there one that means "that device doesn't support
 		 * STREAMS NIT"?
 		 */
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "NIOCBIND: %s: %s",
-			ifr.ifr_name, pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "NIOCBIND: %s", ifr.ifr_name);
+		err = PCAP_ERROR;
 		goto bad;
 	}
 
@@ -369,12 +393,15 @@ pcap_activate_snit(pcap_t *p)
 	si.ic_len = sizeof(p->snapshot);
 	si.ic_dp = (char *)&p->snapshot;
 	if (ioctl(fd, I_STR, (char *)&si) < 0) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "NIOCSSNAP: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "NIOCSSNAP");
+		err = PCAP_ERROR;
 		goto bad;
 	}
-	if (nit_setflags(p) < 0)
+	if (nit_setflags(p) < 0) {
+		err = PCAP_ERROR;
 		goto bad;
+	}
 
 	(void)ioctl(fd, I_FLUSH, (char *)FLUSHR);
 	/*
@@ -385,7 +412,9 @@ pcap_activate_snit(pcap_t *p)
 	p->bufsize = BUFSPACE;
 	p->buffer = malloc(p->bufsize);
 	if (p->buffer == NULL) {
-		strlcpy(p->errbuf, pcap_strerror(errno), PCAP_ERRBUF_SIZE);
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "malloc");
+		err = PCAP_ERROR;
 		goto bad;
 	}
 
@@ -406,36 +435,37 @@ pcap_activate_snit(pcap_t *p)
 	 * Ethernet framing).
 	 */
 	p->dlt_list = (u_int *) malloc(sizeof(u_int) * 2);
-	/*
-	 * If that fails, just leave the list empty.
-	 */
-	if (p->dlt_list != NULL) {
-		p->dlt_list[0] = DLT_EN10MB;
-		p->dlt_list[1] = DLT_DOCSIS;
-		p->dlt_count = 2;
+	if (p->dlt_list == NULL) {
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "malloc");
+		err = PCAP_ERROR;
+		goto bad;
 	}
+	p->dlt_list[0] = DLT_EN10MB;
+	p->dlt_list[1] = DLT_DOCSIS;
+	p->dlt_count = 2;
 
 	p->read_op = pcap_read_snit;
 	p->inject_op = pcap_inject_snit;
-	p->setfilter_op = install_bpf_program;	/* no kernel filtering */
+	p->setfilter_op = pcapint_install_bpf_program;	/* no kernel filtering */
 	p->setdirection_op = NULL;	/* Not implemented. */
 	p->set_datalink_op = NULL;	/* can't change data link type */
-	p->getnonblock_op = pcap_getnonblock_fd;
-	p->setnonblock_op = pcap_setnonblock_fd;
+	p->getnonblock_op = pcapint_getnonblock_fd;
+	p->setnonblock_op = pcapint_setnonblock_fd;
 	p->stats_op = pcap_stats_snit;
 
 	return (0);
  bad:
-	pcap_cleanup_live_common(p);
-	return (PCAP_ERROR);
+	pcapint_cleanup_live_common(p);
+	return (err);
 }
 
 pcap_t *
-pcap_create_interface(const char *device _U_, char *ebuf)
+pcapint_create_interface(const char *device _U_, char *ebuf)
 {
 	pcap_t *p;
 
-	p = pcap_create_common(ebuf, sizeof (struct pcap_snit));
+	p = PCAP_CREATE_COMMON(ebuf, struct pcap_snit);
 	if (p == NULL)
 		return (NULL);
 
@@ -453,8 +483,29 @@ can_be_bound(const char *name _U_)
 	return (1);
 }
 
-int
-pcap_platform_finddevs(pcap_if_t **alldevsp, char *errbuf)
+static int
+get_if_flags(const char *name _U_, bpf_u_int32 *flags _U_, char *errbuf _U_)
 {
-	return (pcap_findalldevs_interfaces(alldevsp, errbuf, can_be_bound));
+	/*
+	 * Nothing we can do.
+	 * XXX - is there a way to find out whether an adapter has
+	 * something plugged into it?
+	 */
+	return (0);
+}
+
+int
+pcapint_platform_finddevs(pcap_if_list_t *devlistp, char *errbuf)
+{
+	return (pcapint_findalldevs_interfaces(devlistp, errbuf, can_be_bound,
+	    get_if_flags));
+}
+
+/*
+ * Libpcap version string.
+ */
+const char *
+pcap_lib_version(void)
+{
+	return (PCAP_VERSION_STRING);
 }

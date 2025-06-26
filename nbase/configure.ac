@@ -157,8 +157,9 @@ fi
 
 AC_CHECK_FUNCS( getopt getopt_long_only)
 
-AC_CHECK_FUNCS(usleep gettimeofday sleep, ,
-  [ AC_LIBOBJ([nbase_time]) ])
+AC_CHECK_FUNCS(usleep gettimeofday sleep localtime_s localtime_r)
+dnl Some of these time functions are always needed
+AC_LIBOBJ([nbase_time])
 
 AC_CHECK_FUNC(getopt_long_only, , 
   [ AC_LIBOBJ([getopt]) ])
@@ -185,13 +186,13 @@ AC_ARG_ENABLE(ipv6,
 AC_SEARCH_LIBS(getaddrinfo, [inet6 socket])
 AC_SEARCH_LIBS(gai_strerror, [inet6 socket])
 AC_SEARCH_LIBS(getnameinfo, [inet6 socket])
-AC_CHECK_FUNCS([gai_strerror inet_pton inet_ntop])
 AC_SEARCH_LIBS(inet_ntop, [nsl resolv network], [],
                [AC_LIBOBJ(inet_ntop)
                ])
 AC_SEARCH_LIBS(inet_pton, [nsl resolv network], [],
                [AC_LIBOBJ(inet_pton)
                ])
+AC_CHECK_FUNCS([gai_strerror inet_pton inet_ntop])
 APR_CHECK_WORKING_GETADDRINFO
 # The inet_addr function is used by APR_CHECK_WORKING_GETNAMEINFO.
 AC_SEARCH_LIBS(inet_addr, [nsl])
@@ -231,67 +232,6 @@ fi
 
 if test "$have_ipv6" = "1"; then
   AC_DEFINE(HAVE_IPV6, 1, [define if IPv6 is available])
-fi
-
-# First we test whether they specified openssl desires explicitly
-use_openssl="yes"
-specialssldir=""
-
-AC_ARG_WITH(openssl,
-[  --with-openssl=DIR    Use optional openssl libs and includes from [DIR]/lib/ 
-and [DIR]/include/openssl/)],
-[  case "$with_openssl" in
-  yes)
-    ;;
-  no)
-    use_openssl="no"
-    ;;
-  *)
-    specialssldir="$with_openssl"
-    ;;
-  esac]
-)
-
-
-# If they didn't specify it, we try to find it
-if test "$use_openssl" = "yes" -a -z "$specialssldir"; then
-  AC_CHECK_HEADER(openssl/ssl.h,,
-  [ use_openssl="no"
-    AC_MSG_WARN([Failed to find openssl/ssl.h so OpenSSL will not be used. If it
- is installed you can try the --with-openssl=DIR argument]) ])
-
- if test "$use_openssl" = "yes"; then
-   AC_CHECK_HEADER(openssl/err.h,,
-    [ use_openssl="no"
-    AC_MSG_WARN([Failed to find openssl/err.h so OpenSSL will not be used. If it
- is installed you can try the --with-openssl=DIR argument]) ])
- fi
-
- if test "$use_openssl" = "yes"; then
-   AC_CHECK_HEADER(openssl/rand.h,,
-    [ use_openssl="no"
-    AC_MSG_WARN([Failed to find openssl/rand.h so OpenSSL will not be used. If i
-t is installed you can try the --with-openssl=DIR argument]) ])
- fi
-
- if test "$use_openssl" = "yes"; then
-   AC_CHECK_LIB(crypto, BIO_int_ctrl,
-    [],
-    [ use_openssl="no"
-    AC_MSG_WARN([Failed to find libcrypto so OpenSSL will not be used. If it is installed you can try the --with-openssl=DIR argument]) ])
- fi
-
- if test "$use_openssl" = "yes"; then
-   AC_CHECK_LIB(ssl, SSL_new,
-    [],
-    [ use_openssl="no"
-    AC_MSG_WARN([Failed to find libssl so OpenSSL will not be used. If it is ins
-talled you can try the --with-openssl=DIR argument]) ])
- fi
-fi
-
-if test "$use_openssl" = "yes"; then
-  AC_DEFINE(HAVE_OPENSSL, 1, [define if libssl is available])
 fi
 
 CHECK_PROC_SELF_EXE

@@ -33,8 +33,8 @@
 -- The <code>login</code> method does not need a lot of explanation. The login
 -- function should return two parameters. If the login was successful it should
 -- return true and a <code>creds.Account</code>. If the login was a failure it
--- should return false and an <code>Error</code>. The driver can signal the
--- Engine to retry a set of credentials by calling the Error objects
+-- should return false and a <code>brute.Error</code>. The driver can signal
+-- the Engine to retry a set of credentials by calling the Error objects
 -- <code>setRetry</code> method. It may also signal the Engine to abort all
 -- password guessing by calling the Error objects <code>setAbort</code> method.
 -- Finally, the driver can notify the Engine about protocol related exception
@@ -314,7 +314,7 @@ _ENV = stdnse.module("brute", stdnse.seeall)
 --                     (can be set using script-arg brute.retries)
 --   * delay         - sets the delay between attempts
 --                     (can be set using script-arg brute.delay)
---   * mode          - can be set to either cred, user or pass and controls
+--   * mode          - can be set to either creds, user or pass and controls
 --                     whether the engine should iterate over users, passwords
 --                     or fetch a list of credentials from a single file.
 --                     (can be set using script-arg brute.mode)
@@ -357,8 +357,8 @@ Options = {
     return (val == "true" or val == true or tonumber(val) == 1)
   end,
 
-  --- Sets the brute mode to either iterate over users or passwords
-  -- @see description for more information.
+  --- Sets the brute mode to either iterate over users or passwords.
+  --  See description for more information.
   --
   -- @param mode string containing either "user" or "password"
   -- @return status true on success else false
@@ -470,13 +470,13 @@ Error = {
     self.done = b
   end,
 
-  -- Marks the username as invalid, aborting further guessing.
+  --- Marks the username as invalid, aborting further guessing.
   -- @param username
   setInvalidAccount = function (self, username)
     self.invalid_account = username
   end,
 
-  -- Checks if the error reported the account as invalid.
+  --- Checks if the error reported the account as invalid.
   -- @return username string containing the invalid account
   isInvalidAccount = function (self)
     return self.invalid_account
@@ -712,7 +712,7 @@ Engine = {
           response = Error:new("Connect error: " .. response)
           response:setRetry(true)
         end
-        if response:isReduce() then
+        if response and response:isReduce() then
           local ret_creds = {}
           ret_creds.connect_phase = true
           return false, response, ret_creds
@@ -770,7 +770,7 @@ Engine = {
         driver:disconnect()
         driver = nil
 
-        if not status and response:isReduce() then
+        if not status and response and response:isReduce() then
           local ret_creds = {}
           ret_creds.username = username
           ret_creds.password = password
@@ -995,10 +995,10 @@ Engine = {
     local passwords = self.passwords
 
     if "function" ~= type(usernames) then
-      return false, "Invalid usernames iterator"
+      return false, ("Invalid usernames iterator: %s"):format(usernames)
     end
     if "function" ~= type(passwords) then
-      return false, "Invalid passwords iterator"
+      return false, ("Invalid passwords iterator: %s"):format(passwords)
     end
 
     local mode = self.options.mode or stdnse.get_script_args "brute.mode"
@@ -1094,7 +1094,7 @@ Engine = {
 
       -- should we stop
       if thread_count <= 0 then
-        if self.initial_accounts_exhausted and #self.retry_accounts == 0 or self.terminate_all then
+        if (self.initial_accounts_exhausted and #self.retry_accounts == 0) or self.terminate_all then
           break
         else
           -- there are some accounts yet to be checked, so revive the engine
@@ -1300,7 +1300,7 @@ Engine = {
 function usernames_iterator ()
   local status, usernames = unpwdb.usernames()
   if not status then
-    return "Failed to load usernames"
+    return usernames or "Failed to load usernames"
   end
   return usernames
 end
@@ -1310,7 +1310,7 @@ end
 function passwords_iterator ()
   local status, passwords = unpwdb.passwords()
   if not status then
-    return "Failed to load passwords"
+    return passwords or "Failed to load passwords"
   end
   return passwords
 end

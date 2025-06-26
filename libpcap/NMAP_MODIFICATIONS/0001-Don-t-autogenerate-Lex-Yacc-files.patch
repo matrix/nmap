@@ -1,44 +1,27 @@
-From f38b1fc263d65a53746108e2c9afacf1dc6a058a Mon Sep 17 00:00:00 2001
-From: Daniel Miller <daniel@bonsaiviking.com>
-Date: Fri, 1 May 2015 14:44:28 +0000
-Subject: [PATCH 1/2] Don't autogenerate Lex/Yacc files.
-
----
- libpcap/Makefile.in  | 33 ++++++++++-----------------------
- libpcap/configure.in | 20 --------------------
- 2 files changed, 10 insertions(+), 43 deletions(-)
-
-diff --git a/libpcap/Makefile.in b/libpcap/Makefile.in
-index f317973..577b848 100644
---- a/libpcap/Makefile.in
-+++ b/libpcap/Makefile.in
-@@ -69,14 +69,6 @@ INSTALL_PROGRAM = @INSTALL_PROGRAM@
+--- a/libpcap/Makefile.in	2021-06-07 20:21:35.000000000 +0000
++++ b/libpcap/Makefile.in	2022-08-31 18:00:55.284383667 +0000
+@@ -78,9 +78,6 @@
  INSTALL_DATA = @INSTALL_DATA@
  RANLIB = @RANLIB@
  
--#
--# Flex and bison allow you to specify the prefixes of the global symbols
--# used by the generated parser.  This allows programs to use lex/yacc
--# and link against libpcap.  If you don't have flex or bison, get them.
--#
--LEX = @V_LEX@
--YACC = @V_YACC@
+-LEX = @LEX@
+-BISON_BYACC = @BISON_BYACC@
 -
  # Explicitly define compilation rule since SunOS 4's make doesn't like gcc.
  # Also, gcc does not remove the .o before forking 'as', which can be a
  # problem if you don't own the file but can write to the directory.
-@@ -152,7 +144,7 @@ TAGFILES = \
+@@ -164,7 +161,7 @@
  	$(SRC) $(HDR)
  
- CLEANFILES = $(OBJ) libpcap.* $(TESTS) \
--	$(PROG)-`cat $(srcdir)/VERSION`.tar.gz $(GENSRC) $(GENHDR) \
+ CLEANFILES = $(OBJ) libpcap.a libpcap.so.`cat $(srcdir)/VERSION` \
+-	$(PROG)-`cat $(srcdir)/VERSION`.tar.gz $(GENERATED_C_SRC) $(GENHDR) \
 +	$(PROG)-`cat $(srcdir)/VERSION`.tar.gz \
- 	lex.yy.c pcap-config
+ 	lex.yy.c pcap-config libpcap.pc libpcap.$(DYEXT)
  
  MAN1 = pcap-config.1
-@@ -360,6 +352,15 @@ EXTRA_DIST = \
+@@ -417,6 +414,15 @@
  
- all: libpcap.a shared pcap-config
+ all: libpcap.a shared $(BUILD_RPCAPD) libpcap.pc pcap-config
  
 +# Inhibit implicit rule Make seems to have for using yacc/lex to
 +# recompile new scanner.c/grammar.c -- we ship ones which we want to
@@ -52,75 +35,150 @@ index f317973..577b848 100644
  libpcap.a: $(OBJ)
  	@rm -f $@
  	$(AR) rc $@ $(OBJ) $(ADDLARCHIVEOBJS)
-@@ -443,25 +444,11 @@ libpcap.shareda: $(OBJ)
+@@ -498,15 +504,6 @@
  #
  libpcap.none:
  
 -scanner.c: $(srcdir)/scanner.l
--	@rm -f $@ $@.bottom
--	$(srcdir)/runlex.sh $(LEX) -o$@ $<
--	mv $@ $@.bottom
--	cat $@.top $@.bottom > $@
--	@rm $@.bottom
+-	$(LEX) -P pcap_ --header-file=scanner.h --nounput -o scanner.c $<
+-scanner.h: scanner.c
+-## Recover from the removal of $@
+-	@if test -f $@; then :; else \
+-		rm -f scanner.c; \
+-		$(MAKE) $(MAKEFLAGS) scanner.c; \
+-	fi
 -
- scanner.o: scanner.c tokdefs.h
+ scanner.o: scanner.c grammar.h
  	$(CC) $(FULL_CFLAGS) -c scanner.c
  
- pcap.o: version.h
+@@ -529,15 +526,6 @@
+ 	./config.status --file=$@.tmp:$(srcdir)/grammar.y.in
+ 	mv $@.tmp $@
  
--tokdefs.h: grammar.c
--grammar.c: $(srcdir)/grammar.y
--	@rm -f grammar.c tokdefs.h
--	$(YACC) -d $<
--	mv y.tab.c grammar.c
--	mv y.tab.h tokdefs.h
--
- grammar.o: grammar.c
- 	@rm -f $@
- 	$(CC) $(FULL_CFLAGS) -Dyylval=pcap_lval -c grammar.c
-diff --git a/libpcap/configure.in b/libpcap/configure.in
-index be4b29e..ec87283 100644
---- a/libpcap/configure.in
-+++ b/libpcap/configure.in
-@@ -1051,24 +1051,6 @@ if test "$V_PCAP" = snf -a "$ac_cv_lbl_snf_api" = no; then
- 	AC_MSG_ERROR(Specifying the capture type as 'snf' requires the Myricom Sniffer API to be present; use --with-snf=DIR)
- fi
- 
--AC_LBL_LEX_AND_YACC(V_LEX, V_YACC, pcap_)
--if test "$V_LEX" = lex ; then
--# Some versions of lex can't handle the definitions section of scanner.l .
--# Try lexing it and complain if it can't deal.
--	AC_CACHE_CHECK([for capable lex], tcpdump_cv_capable_lex,
--		if lex -t scanner.l > /dev/null 2>&1; then
--			tcpdump_cv_capable_lex=yes
--		else
--			tcpdump_cv_capable_lex=insufficient
--		fi)
--	if test $tcpdump_cv_capable_lex = insufficient ; then
--		AC_MSG_ERROR([Your operating system's lex is insufficient to compile
-- libpcap.  flex is a lex replacement that has many advantages, including
-- being able to compile libpcap.  For more information, see
-- http://www.gnu.org/software/flex/flex.html .])
+-grammar.c: grammar.y
+-	$(BISON_BYACC) -p pcap_ -o grammar.c -d $<
+-grammar.h: grammar.c
+-## Recover from the removal of $@
+-	@if test -f $@; then :; else \
+-		rm -f grammar.c; \
+-		$(MAKE) $(MAKEFLAGS) grammar.c; \
 -	fi
+-
+ grammar.o: grammar.c scanner.h
+ 	$(CC) $(FULL_CFLAGS) -c grammar.c
+ 
+--- a/libpcap/configure.ac	2021-06-07 20:21:35.000000000 +0000
++++ b/libpcap/configure.ac	2022-08-31 18:02:07.017322554 +0000
+@@ -1716,112 +1716,6 @@
+ AC_MSG_RESULT(${enable_yydebug-no})
+ 
+ #
+-# Look for {f}lex.
+-#
+-AC_PROG_LEX
+-if test "$LEX" = ":"; then
+-	AC_MSG_ERROR([Neither flex nor lex was found.])
 -fi
 -
+-#
+-# Make sure {f}lex supports the -P, --header-file, and --nounput flags
+-# and supports processing our scanner.l.
+-#
+-AC_CACHE_CHECK([for capable lex], tcpdump_cv_capable_lex,
+-	if $LEX -P pcap_ --header-file=/dev/null --nounput -t $srcdir/scanner.l > /dev/null 2>&1; then
+-	    tcpdump_cv_capable_lex=yes
+-	else
+-	    tcpdump_cv_capable_lex=insufficient
+-	fi)
+-if test $tcpdump_cv_capable_lex = insufficient ; then
+-	AC_MSG_ERROR([$LEX is insufficient to compile libpcap.
+- libpcap requires Flex 2.5.31 or later, or a compatible version of lex.
+- If a suitable version of Lex/Flex is available as a non-standard command
+- and/or not in the PATH, you can specify it using the LEX environment
+- variable. That said, on some systems the error can mean that Flex/Lex is
+- actually acceptable, but m4 is not. Likewise, if a suitable version of
+- m4 (such as GNU M4) is available but has not been detected, you can
+- specify it using the M4 environment variable.])
+-fi
+-
+-#
+-# Look for yacc/bison/byacc.
+-# If it's Bison, we do not want -y, as 1) we will be using -o to cause
+-# the output for XXX.y to be written to XXX.c and 2) we don't want
+-# it to issue warnings about stuff not supported by POSIX YACC - we
+-# want to use that stuff, and don't care whether plain YACC supports
+-# it or not, we require either Bison or Berkeley YACC.
+-#
+-BISON_BYACC=""
+-#
+-# Look for Bison.
+-#
+-AC_CHECK_PROGS(BISON_BYACC, bison)
+-if test x"$BISON_BYACC" != x; then
+-	#
+-	# We found Bison.
+-	#
+-	# Bison prior to 2.4(.1) doesn't support "%define api.pure", so use
+-	# "%pure-parser".
+-	#
+-	bison_major_version=`$BISON_BYACC -V | sed -n 's/.* \(@<:@1-9@:>@@<:@0-9@:>@*\)\.@<:@0-9@:>@@<:@0-9.@:>@*/\1/p'`
+-	bison_minor_version=`$BISON_BYACC -V | sed -n 's/.* @<:@1-9@:>@@<:@0-9@:>@*\.\(@<:@0-9@:>@+\).*/\1/p'`
+-	if test "$bison_major_version" -lt 2 -o \
+-	    \( "$bison_major_version" -eq 2 -a "$bison_major_version" -lt 4 \)
+-	then
+-		REENTRANT_PARSER="%pure-parser"
+-	else
+-		REENTRANT_PARSER="%define api.pure"
+-	fi
+-else
+-	#
+-	# We didn't find Bison; check for Berkeley YACC, under the
+-	# names byacc and yacc.
+-	#
+-	AC_CHECK_PROGS(BISON_BYACC, byacc yacc)
+-	if test x"$BISON_BYACC" != x; then
+-		#
+-		# Make sure this is Berkeley YACC, not AT&T YACC;
+-		# the latter doesn't support reentrant parsers.
+-		# Run it with "-V"; that succeeds and reports the
+-		# version number with Berkeley YACC, but will
+-		# (probably) fail with various vendor flavors
+-		# of AT&T YACC.
+-		#
+-		# Hopefully this also eliminates any versions
+-		# of Berkeley YACC that don't support reentrant
+-		# parsers, if there are any.
+-		#
+-		AC_CACHE_CHECK([for capable yacc], tcpdump_cv_capable_yacc,
+-		    if $BISON_BYACC -V >/dev/null 2>&1; then
+-			tcpdump_cv_capable_yacc=yes
+-		    else
+-			tcpdump_cv_capable_yacc=insufficient
+-		    fi)
+-		if test $tcpdump_cv_capable_yacc = insufficient ; then
+-		    AC_MSG_ERROR([$BISON_BYACC is insufficient to compile libpcap.
+- libpcap requires Bison, a newer version of Berkeley YACC with support
+- for reentrant parsers, or another YACC compatible with them.])
+-		fi
+-	else
+-		#
+-		# OK, we found neither byacc nor yacc.
+-		#
+-		AC_MSG_ERROR([Neither bison, byacc, nor yacc was found.
+- libpcap requires Bison, a newer version of Berkeley YACC with support
+- for reentrant parsers, or another YACC compatible with them.])
+-	fi
+-
+-	#
+-	# Berkeley YACC doesn't support "%define api.pure", so use
+-	# "%pure-parser".
+-	#
+-	REENTRANT_PARSER="%pure-parser"
+-fi
+-AC_SUBST(BISON_BYACC)
+-AC_SUBST(REENTRANT_PARSER)
+-
+-#
+ # Do various checks for various OSes and versions of those OSes.
  #
- # Assume, by default, no support for shared libraries and V7/BSD convention
- # for man pages (file formats in section 5, miscellaneous info in section 7).
-@@ -1351,13 +1333,11 @@ AC_SUBST(V_CCOPT)
- AC_SUBST(V_DEFS)
- AC_SUBST(V_FINDALLDEVS)
- AC_SUBST(V_INCLS)
--AC_SUBST(V_LEX)
- AC_SUBST(V_PCAP)
- AC_SUBST(V_SHLIB_CMD)
- AC_SUBST(V_SHLIB_OPT)
- AC_SUBST(V_SONAME_OPT)
- AC_SUBST(V_RPATH_OPT)
--AC_SUBST(V_YACC)
- AC_SUBST(ADDLOBJS)
- AC_SUBST(ADDLARCHIVEOBJS)
- AC_SUBST(SSRC)
--- 
-1.9.1
-
+ # Assume, by default, no support for shared libraries and V7/BSD

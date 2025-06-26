@@ -35,7 +35,6 @@ license = "Same as Nmap--See https://nmap.org/book/man-legal.html"
 categories = {"exploit","vuln"}
 
 local http = require "http"
-local nmap = require "nmap"
 local shortport = require "shortport"
 local vulns = require "vulns"
 local stdnse = require "stdnse"
@@ -54,7 +53,7 @@ can be injected into the resulting 404 page. This includes linking to an
 untrusted website and XSS injection.]],
     IDS = {
       CVE = "CVE-2013-6786",
-      OSVDB = "99694",
+      BID = "63721",
     },
     references = {
       'https://antoniovazquezblanco.github.io/docs/advisories/Advisory_RomPagerXSS.pdf',

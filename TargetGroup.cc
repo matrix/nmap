@@ -6,141 +6,77 @@
  * expressions that go into TargetGroup classes.                           *
  *                                                                         *
  ***********************IMPORTANT NMAP LICENSE TERMS************************
- *                                                                         *
- * The Nmap Security Scanner is (C) 1996-2018 Insecure.Com LLC ("The Nmap  *
- * Project"). Nmap is also a registered trademark of the Nmap Project.     *
- * This program is free software; you may redistribute and/or modify it    *
- * under the terms of the GNU General Public License as published by the   *
- * Free Software Foundation; Version 2 ("GPL"), BUT ONLY WITH ALL OF THE   *
- * CLARIFICATIONS AND EXCEPTIONS DESCRIBED HEREIN.  This guarantees your   *
- * right to use, modify, and redistribute this software under certain      *
- * conditions.  If you wish to embed Nmap technology into proprietary      *
- * software, we sell alternative licenses (contact sales@nmap.com).        *
- * Dozens of software vendors already license Nmap technology such as      *
- * host discovery, port scanning, OS detection, version detection, and     *
- * the Nmap Scripting Engine.                                              *
- *                                                                         *
- * Note that the GPL places important restrictions on "derivative works",  *
- * yet it does not provide a detailed definition of that term.  To avoid   *
- * misunderstandings, we interpret that term as broadly as copyright law   *
- * allows.  For example, we consider an application to constitute a        *
- * derivative work for the purpose of this license if it does any of the   *
- * following with any software or content covered by this license          *
- * ("Covered Software"):                                                   *
- *                                                                         *
- * o Integrates source code from Covered Software.                         *
- *                                                                         *
- * o Reads or includes copyrighted data files, such as Nmap's nmap-os-db   *
- * or nmap-service-probes.                                                 *
- *                                                                         *
- * o Is designed specifically to execute Covered Software and parse the    *
- * results (as opposed to typical shell or execution-menu apps, which will *
- * execute anything you tell them to).                                     *
- *                                                                         *
- * o Includes Covered Software in a proprietary executable installer.  The *
- * installers produced by InstallShield are an example of this.  Including *
- * Nmap with other software in compressed or archival form does not        *
- * trigger this provision, provided appropriate open source decompression  *
- * or de-archiving software is widely available for no charge.  For the    *
- * purposes of this license, an installer is considered to include Covered *
- * Software even if it actually retrieves a copy of Covered Software from  *
- * another source during runtime (such as by downloading it from the       *
- * Internet).                                                              *
- *                                                                         *
- * o Links (statically or dynamically) to a library which does any of the  *
- * above.                                                                  *
- *                                                                         *
- * o Executes a helper program, module, or script to do any of the above.  *
- *                                                                         *
- * This list is not exclusive, but is meant to clarify our interpretation  *
- * of derived works with some common examples.  Other people may interpret *
- * the plain GPL differently, so we consider this a special exception to   *
- * the GPL that we apply to Covered Software.  Works which meet any of     *
- * these conditions must conform to all of the terms of this license,      *
- * particularly including the GPL Section 3 requirements of providing      *
- * source code and allowing free redistribution of the work as a whole.    *
- *                                                                         *
- * As another special exception to the GPL terms, the Nmap Project grants  *
- * permission to link the code of this program with any version of the     *
- * OpenSSL library which is distributed under a license identical to that  *
- * listed in the included docs/licenses/OpenSSL.txt file, and distribute   *
- * linked combinations including the two.                                  *
- *                                                                         *
- * The Nmap Project has permission to redistribute Npcap, a packet         *
- * capturing driver and library for the Microsoft Windows platform.        *
- * Npcap is a separate work with it's own license rather than this Nmap    *
- * license.  Since the Npcap license does not permit redistribution        *
- * without special permission, our Nmap Windows binary packages which      *
- * contain Npcap may not be redistributed without special permission.      *
- *                                                                         *
- * Any redistribution of Covered Software, including any derived works,    *
- * must obey and carry forward all of the terms of this license, including *
- * obeying all GPL rules and restrictions.  For example, source code of    *
- * the whole work must be provided and free redistribution must be         *
- * allowed.  All GPL references to "this License", are to be treated as    *
- * including the terms and conditions of this license text as well.        *
- *                                                                         *
- * Because this license imposes special exceptions to the GPL, Covered     *
- * Work may not be combined (even as part of a larger work) with plain GPL *
- * software.  The terms, conditions, and exceptions of this license must   *
- * be included as well.  This license is incompatible with some other open *
- * source licenses as well.  In some cases we can relicense portions of    *
- * Nmap or grant special permissions to use it in other open source        *
- * software.  Please contact fyodor@nmap.org with any such requests.       *
- * Similarly, we don't incorporate incompatible open source software into  *
- * Covered Software without special permission from the copyright holders. *
- *                                                                         *
- * If you have any questions about the licensing restrictions on using     *
- * Nmap in other works, we are happy to help.  As mentioned above, we also *
- * offer an alternative license to integrate Nmap into proprietary         *
- * applications and appliances.  These contracts have been sold to dozens  *
- * of software vendors, and generally include a perpetual license as well  *
- * as providing support and updates.  They also fund the continued         *
- * development of Nmap.  Please email sales@nmap.com for further           *
- * information.                                                            *
- *                                                                         *
- * If you have received a written license agreement or contract for        *
- * Covered Software stating terms other than these, you may choose to use  *
- * and redistribute Covered Software under those terms instead of these.   *
- *                                                                         *
- * Source is provided to this software because we believe users have a     *
- * right to know exactly what a program is going to do before they run it. *
- * This also allows you to audit the software for security holes.          *
- *                                                                         *
- * Source code also allows you to port Nmap to new platforms, fix bugs,    *
- * and add new features.  You are highly encouraged to send your changes   *
- * to the dev@nmap.org mailing list for possible incorporation into the    *
- * main distribution.  By sending these changes to Fyodor or one of the    *
- * Insecure.Org development mailing lists, or checking them into the Nmap  *
- * source code repository, it is understood (unless you specify            *
- * otherwise) that you are offering the Nmap Project the unlimited,        *
- * non-exclusive right to reuse, modify, and relicense the code.  Nmap     *
- * will always be available Open Source, but this is important because     *
- * the inability to relicense code has caused devastating problems for     *
- * other Free Software projects (such as KDE and NASM).  We also           *
- * occasionally relicense the code to third parties as discussed above.    *
- * If you wish to specify special license conditions of your               *
- * contributions, just say so when you send them.                          *
- *                                                                         *
- * This program is distributed in the hope that it will be useful, but     *
- * WITHOUT ANY WARRANTY; without even the implied warranty of              *
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the Nmap      *
- * license file for more details (it's in a COPYING file included with     *
- * Nmap, and also available from https://svn.nmap.org/nmap/COPYING)        *
- *                                                                         *
+ *
+ * The Nmap Security Scanner is (C) 1996-2025 Nmap Software LLC ("The Nmap
+ * Project"). Nmap is also a registered trademark of the Nmap Project.
+ *
+ * This program is distributed under the terms of the Nmap Public Source
+ * License (NPSL). The exact license text applying to a particular Nmap
+ * release or source code control revision is contained in the LICENSE
+ * file distributed with that version of Nmap or source code control
+ * revision. More Nmap copyright/legal information is available from
+ * https://nmap.org/book/man-legal.html, and further information on the
+ * NPSL license itself can be found at https://nmap.org/npsl/ . This
+ * header summarizes some key points from the Nmap license, but is no
+ * substitute for the actual license text.
+ *
+ * Nmap is generally free for end users to download and use themselves,
+ * including commercial use. It is available from https://nmap.org.
+ *
+ * The Nmap license generally prohibits companies from using and
+ * redistributing Nmap in commercial products, but we sell a special Nmap
+ * OEM Edition with a more permissive license and special features for
+ * this purpose. See https://nmap.org/oem/
+ *
+ * If you have received a written Nmap license agreement or contract
+ * stating terms other than these (such as an Nmap OEM license), you may
+ * choose to use and redistribute Nmap under those terms instead.
+ *
+ * The official Nmap Windows builds include the Npcap software
+ * (https://npcap.com) for packet capture and transmission. It is under
+ * separate license terms which forbid redistribution without special
+ * permission. So the official Nmap Windows builds may not be redistributed
+ * without special permission (such as an Nmap OEM license).
+ *
+ * Source is provided to this software because we believe users have a
+ * right to know exactly what a program is going to do before they run it.
+ * This also allows you to audit the software for security holes.
+ *
+ * Source code also allows you to port Nmap to new platforms, fix bugs, and
+ * add new features. You are highly encouraged to submit your changes as a
+ * Github PR or by email to the dev@nmap.org mailing list for possible
+ * incorporation into the main distribution. Unless you specify otherwise, it
+ * is understood that you are offering us very broad rights to use your
+ * submissions as described in the Nmap Public Source License Contributor
+ * Agreement. This is important because we fund the project by selling licenses
+ * with various terms, and also because the inability to relicense code has
+ * caused devastating problems for other Free Software projects (such as KDE
+ * and NASM).
+ *
+ * The free version of Nmap is distributed in the hope that it will be
+ * useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. Warranties,
+ * indemnification and commercial support are all available through the
+ * Npcap OEM program--see https://nmap.org/oem/
+ *
  ***************************************************************************/
 
 /* $Id$ */
 
 #include "tcpip.h"
 #include "TargetGroup.h"
+#include "targets.h"
 #include "NmapOps.h"
 #include "nmap_error.h"
+#include "nmap_dns.h"
 #include "nmap.h"
 #include "libnetutil/netutil.h"
 
 #include <string>
 #include <sstream>
+#include <vector>
+#include <algorithm>
+#include <typeinfo>
 #include <errno.h>
 #include <limits.h> // CHAR_BIT
 
@@ -171,7 +107,7 @@ public:
   /* Parses an expression such as 192.168.0.0/16, 10.1.0-5.1-254, or
      fe80::202:e3ff:fe14:1102/112 and returns a newly allocated NetBlock. The af
      parameter is AF_INET or AF_INET6. Returns NULL in case of error. */
-  static NetBlock *parse_expr(const char *target_expr, int af);
+  static NetBlock *parse_expr(const char *target_expr, int af, std::vector<DNS::Request> &requests);
 
   bool is_resolved_address(const struct sockaddr_storage *ss) const;
 
@@ -179,10 +115,32 @@ public:
    * NetBlock subclass, override this method. Otherwise, it's safe to reassign
    * the return value to the pointer that this method was called through.
    * On error, return NULL. */
-  virtual NetBlock *resolve() { return this; }
+  virtual NetBlock *resolve(const DNS::Request &req) { return this; }
+  virtual void reject_last_host() {}
   virtual bool next(struct sockaddr_storage *ss, size_t *sslen) = 0;
   virtual void apply_netmask(int bits) = 0;
   virtual std::string str() const = 0;
+};
+
+class NetBlockRandomIPv4 : public NetBlock {
+public:
+  NetBlockRandomIPv4();
+
+  void reject_last_host() { if (!infinite) count++; }
+  void set_num_random(unsigned long num) {
+    if (num == 0)
+      infinite = true;
+    else
+      count = num;
+  }
+  bool next(struct sockaddr_storage *ss, size_t *sslen);
+  void apply_netmask(int bits) {}
+  std::string str() const {return "Random IPv4 addresses";}
+
+private:
+  struct sockaddr_in base;
+  unsigned long count;
+  bool infinite;
 };
 
 class NetBlockIPv4Ranges : public NetBlock {
@@ -222,7 +180,7 @@ public:
   int af;
   int bits;
 
-  NetBlock *resolve();
+  NetBlock *resolve(const DNS::Request &req);
 
   bool next(struct sockaddr_storage *ss, size_t *sslen);
   void apply_netmask(int bits);
@@ -239,7 +197,7 @@ static char *split_netmask(const char *expr, int *bits) {
   slash = strrchr(expr, '/');
   if (slash != NULL) {
     long l;
-    char *tail;
+    const char *tail;
 
     l = parse_long(slash + 1, &tail);
     if (tail == slash + 1 || *tail != '\0' || l < 0 || l > INT_MAX)
@@ -271,7 +229,7 @@ static int parse_ipv4_ranges(octet_bitvector octets[4], const char *spec) {
     } else {
       for (;;) {
         long start, end;
-        char *tail;
+        const char *tail;
 
         errno = 0;
         start = parse_long(p, &tail);
@@ -323,7 +281,7 @@ static int parse_ipv4_ranges(octet_bitvector octets[4], const char *spec) {
   return 0;
 }
 
-static NetBlock *parse_expr_without_netmask(const char *hostexp, int af) {
+static NetBlock *parse_expr_without_netmask(const char *hostexp, int af, std::vector<DNS::Request> &requests) {
   struct sockaddr_storage ss;
   size_t sslen;
 
@@ -350,13 +308,19 @@ static NetBlock *parse_expr_without_netmask(const char *hostexp, int af) {
     return netblock_ipv6;
   }
 
-  return new NetBlockHostname(hostexp, af);
+  NetBlockHostname *nb = new NetBlockHostname(hostexp, af);
+  DNS::Request req;
+  req.name = hostexp;
+  req.userdata = nb;
+  req.type = DNS::ANY;
+  requests.push_back(req);
+  return nb;
 }
 
 /* Parses an expression such as 192.168.0.0/16, 10.1.0-5.1-254, or
    fe80::202:e3ff:fe14:1102/112 and returns a newly allocated NetBlock. The af
    parameter is AF_INET or AF_INET6. Returns NULL in case of error. */
-NetBlock *NetBlock::parse_expr(const char *target_expr, int af) {
+NetBlock *NetBlock::parse_expr(const char *target_expr, int af, std::vector<DNS::Request> &requests) {
   NetBlock *netblock;
   char *hostexp;
   int bits;
@@ -372,7 +336,7 @@ NetBlock *NetBlock::parse_expr(const char *target_expr, int af) {
     bits = -1;
   }
 
-  netblock = parse_expr_without_netmask(hostexp, af);
+  netblock = parse_expr_without_netmask(hostexp, af, requests);
   if (netblock == NULL)
     goto bail;
   netblock->apply_netmask(bits);
@@ -392,6 +356,28 @@ bool NetBlock::is_resolved_address(const struct sockaddr_storage *ss) const {
     }
   }
   return false;
+}
+
+NetBlockRandomIPv4::NetBlockRandomIPv4() : count(0), infinite(false) {
+  memset(&base, 0, sizeof(base));
+  base.sin_family = AF_INET;
+}
+
+bool NetBlockRandomIPv4::next(struct sockaddr_storage *ss, size_t *sslen) {
+  if (!infinite) {
+    if (count > 0) {
+      count--;
+    }
+    else {
+      return false;
+    }
+  }
+  do {
+    base.sin_addr.s_addr = get_random_unique_u32();
+  } while (ip_is_reserved((const struct sockaddr_storage *)&base));
+  memcpy(ss, &base, sizeof(base));
+  *sslen = sizeof(base);
+  return true;
 }
 
 NetBlockIPv4Ranges::NetBlockIPv4Ranges() {
@@ -728,48 +714,42 @@ std::string NetBlockIPv6Netmask::str() const {
   return result.str();
 }
 
-NetBlock *NetBlockHostname::resolve() {
-  struct addrinfo *addrs, *addr;
+NetBlock *NetBlockHostname::resolve(const DNS::Request &req) {
   std::list<struct sockaddr_storage> resolvedaddrs;
   std::list<struct sockaddr_storage> unscanned_addrs;
   NetBlock *netblock;
-  struct sockaddr_storage ss;
-  size_t sslen;
 
-  addrs = resolve_all(this->hostname.c_str(), AF_UNSPEC);
-  for (addr = addrs; addr != NULL; addr = addr->ai_next) {
-    if (addr->ai_addrlen < sizeof(ss)) {
-      memcpy(&ss, addr->ai_addr, addr->ai_addrlen);
-      if ((o.resolve_all || resolvedaddrs.empty()) && addr->ai_family == this->af) {
-        resolvedaddrs.push_back(ss);
-      }
-      else {
-        unscanned_addrs.push_back(ss);
-      }
+  for (size_t i = 0; i < req.ssv.size(); i++) {
+    const struct sockaddr_storage &ss = req.ssv[i];
+    if (ss.ss_family == af && (o.resolve_all || resolvedaddrs.empty())) {
+      resolvedaddrs.push_back(ss);
+    }
+    else {
+      unscanned_addrs.push_back(ss);
     }
   }
-  if (addrs != NULL)
-    freeaddrinfo(addrs);
 
   if (resolvedaddrs.empty()) {
-    if (unscanned_addrs.empty())
-      return NULL;
-
-    switch (this->af) {
-      case AF_INET:
-        error("Warning: Hostname %s resolves, but not to any IPv4 address. Try scanning with -6", this->hostname.c_str());
-        break;
-      case AF_INET6:
-        error("Warning: Hostname %s resolves, but not to any IPv6 address. Try scanning without -6", this->hostname.c_str());
-        break;
-      default:
-        error("Warning: Unknown address family: %d", this->af);
-        break;
+    if (!unscanned_addrs.empty()) {
+      switch (this->af) {
+        case AF_INET:
+          error("Warning: Hostname %s resolves, but not to any IPv4 address. Try scanning with -6", this->hostname.c_str());
+          break;
+        case AF_INET6:
+          error("Warning: Hostname %s resolves, but not to any IPv6 address. Try scanning without -6", this->hostname.c_str());
+          break;
+        default:
+          error("Warning: Unknown address family: %d", this->af);
+          break;
+      }
     }
+    error("Failed to resolve \"%s\".", this->hostname.c_str());
+    if (this->hostname == "-")
+      error("Bare '-': did you put a space between '--'?");
     return NULL;
   }
-  ss = resolvedaddrs.front();
-  sslen = sizeof(ss);
+  struct sockaddr_storage &ss = resolvedaddrs.front();
+  size_t sslen = sizeof(ss);
 
   if (!unscanned_addrs.empty() && o.verbose > 1) {
     error("Warning: Hostname %s resolves to %lu IPs. Using %s.", this->hostname.c_str(),
@@ -795,8 +775,8 @@ NetBlock *NetBlockHostname::resolve() {
     return NULL;
 
   netblock->hostname = this->hostname;
-  netblock->resolvedaddrs = resolvedaddrs;
-  netblock->unscanned_addrs = unscanned_addrs;
+  netblock->resolvedaddrs.swap(resolvedaddrs);
+  netblock->unscanned_addrs.swap(unscanned_addrs);
   netblock->current_addr = netblock->resolvedaddrs.begin();
   netblock->apply_netmask(this->bits);
 
@@ -829,21 +809,72 @@ std::string NetBlockHostname::str() const {
 }
 
 TargetGroup::~TargetGroup() {
-  if (this->netblock != NULL)
-    delete this->netblock;
+  for (std::list<NetBlock *>::iterator it = netblocks.begin();
+      it != netblocks.end(); it++) {
+    delete *it;
+  }
+}
+
+void TargetGroup::reject_last_host() {
+  assert(!netblocks.empty());
+  NetBlock *nb = netblocks.front();
+  nb->reject_last_host();
 }
 
 /* Initializes (or reinitializes) the object with a new expression, such
    as 192.168.0.0/16 , 10.1.0-5.1-254 , or fe80::202:e3ff:fe14:1102 .
-   Returns 0 for success */
-int TargetGroup::parse_expr(const char *target_expr, int af) {
-  if (this->netblock != NULL)
-    delete this->netblock;
-  this->netblock = NetBlock::parse_expr(target_expr, af);
-  if (this->netblock != NULL)
-    return 0;
-  else
-    return 1;
+    */
+bool TargetGroup::load_expressions(HostGroupState *hs, int af) {
+  assert(netblocks.empty());
+  // This is a wild guess, but we need some sort of limit.
+  static const size_t EXPR_PARSE_BATCH_SZ = o.ping_group_sz;
+  const char *target_expr = NULL;
+  std::vector<DNS::Request> requests;
+  requests.reserve(EXPR_PARSE_BATCH_SZ/4);
+  while (netblocks.size() < EXPR_PARSE_BATCH_SZ
+      && NULL != (target_expr = hs->next_expression())) {
+    NetBlock *nb = NetBlock::parse_expr(target_expr, af, requests);
+    if (nb == NULL) {
+      log_bogus_target(target_expr);
+    }
+    else {
+      netblocks.push_back(nb);
+    }
+  }
+  if (netblocks.empty()) {
+    return false;
+  }
+  if (requests.size() > 0) {
+    nmap_mass_dns(requests.data(), requests.size());
+  }
+  std::list<NetBlock *>::iterator nb_it = netblocks.begin();
+  for (std::vector<DNS::Request>::const_iterator rit = requests.begin();
+      rit != requests.end(); rit++) {
+    const DNS::Request &req = *rit;
+    NetBlock *nb_old = (NetBlock *) req.userdata;
+    NetBlock *nb_new = nb_old->resolve(req);
+    nb_it = std::find(nb_it, netblocks.end(), nb_old);
+
+    if (nb_new == NULL) {
+      // Resolution failed; remove the NetBlock
+      nb_it = netblocks.erase(nb_it);
+      delete nb_old;
+    }
+    else {
+      assert (nb_new != nb_old);
+      // Resolution succeeded; replace the NetBlock
+      *nb_it = nb_new;
+      delete nb_old;
+    }
+  }
+  requests.clear();
+  return !netblocks.empty();
+}
+
+void TargetGroup::generate_random_ips(unsigned long num_random) {
+  NetBlockRandomIPv4 *nbrand = new NetBlockRandomIPv4();
+  nbrand->set_num_random(num_random);
+  netblocks.push_front(nbrand);
 }
 
 /* Grab the next host from this expression (if any) and updates its internal
@@ -851,48 +882,45 @@ int TargetGroup::parse_expr(const char *target_expr, int af) {
    fills in ss if successful.  ss must point to a pre-allocated
    sockaddr_storage structure */
 int TargetGroup::get_next_host(struct sockaddr_storage *ss, size_t *sslen) {
-  if (this->netblock == NULL)
-    return -1;
+  while (!netblocks.empty()) {
 
-  /* If all we have at this point is a hostname and netmask, resolve into
-     something where we know the address. If we ever have to use strictly the
-     hostname, without doing local DNS resolution (like with a proxy scan), this
-     has to be made conditional (and perhaps an error if the netmask doesn't
-     limit it to exactly one address). */
-  NetBlock *netblock_resolved = this->netblock->resolve();
-  if (netblock_resolved != NULL) {
-    this->netblock = netblock_resolved;
+    NetBlock *nb = netblocks.front();
+    if (nb->next(ss, sslen)) {
+      return 0;
+    }
+    // Ran out of hosts in that block. Remove it.
+    netblocks.pop_front();
+    delete nb;
   }
-  else {
-    error("Failed to resolve \"%s\".", this->netblock->hostname.c_str());
-    return -1;
-  }
-
-  if (this->netblock->next(ss, sslen))
-    return 0;
-  else
-    return -1;
+  // Ran out of netblocks
+  return -1;
 }
 
 /* Returns true iff the given address is the one that was resolved to create
    this target group; i.e., not one of the addresses derived from it with a
    netmask. */
 bool TargetGroup::is_resolved_address(const struct sockaddr_storage *ss) const {
-  return this->netblock->is_resolved_address(ss);
+  assert(!netblocks.empty());
+  NetBlock *nb = netblocks.front();
+  return nb->is_resolved_address(ss);
 }
 
 /* Return a string of the name or address that was resolved for this group. */
 const char *TargetGroup::get_resolved_name(void) const {
-  if (this->netblock->hostname.empty())
+  assert(!netblocks.empty());
+  NetBlock *nb = netblocks.front();
+  if (nb->hostname.empty())
     return NULL;
   else
-    return this->netblock->hostname.c_str();
+    return nb->hostname.c_str();
 }
 
 /* Return the list of addresses that the name for this group resolved to, but
    which were not scanned, if it came from a name resolution. */
 const std::list<struct sockaddr_storage> &TargetGroup::get_unscanned_addrs(void) const {
-  return this->netblock->unscanned_addrs;
+  assert(!netblocks.empty());
+  NetBlock *nb = netblocks.front();
+  return nb->unscanned_addrs;
 }
 
 /* is the current expression a named host */

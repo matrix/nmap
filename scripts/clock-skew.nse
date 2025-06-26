@@ -1,8 +1,8 @@
-local coroutine = require "coroutine"
 local datetime = require "datetime"
 local formulas = require "formulas"
 local math = require "math"
 local nmap = require "nmap"
+local outlib = require "outlib"
 local stdnse = require "stdnse"
 local table = require "table"
 
@@ -94,19 +94,25 @@ local function record_stats(host, mean, stddev, median)
 end
 
 hostaction = function(host)
-  local mean, stddev = formulas.mean_stddev(host.registry.datetime_skew)
-  local median = formulas.median(host.registry.datetime_skew)
+  local skews = host.registry.datetime_skew
+  if not skews or #skews < 1 then
+    return nil
+  end
+  local mean, stddev = formulas.mean_stddev(skews)
+  local median = formulas.median(skews)
   -- truncate to integers; we don't care about fractional seconds)
   mean = math.modf(mean)
   stddev = math.modf(stddev)
   median = math.modf(median)
   record_stats(host, mean, stddev, median)
   if mean ~= 0 or stddev ~= 0 or nmap.verbosity() > 1 then
-    local out = {mean = mean, stddev = stddev, median = median}
-    return out, ("mean: %s, deviation: %s, median: %s"):format(
-      datetime.format_time(mean),
-      datetime.format_time(stddev),
-      datetime.format_time(median)
+    local out = {count = #skews, mean = mean, stddev = stddev, median = median}
+    return out, (#skews == 1 and datetime.format_time(mean)
+      or ("mean: %s, deviation: %s, median: %s"):format(
+        datetime.format_time(mean),
+        datetime.format_time(stddev),
+        datetime.format_time(median)
+        )
       )
   end
 end
@@ -118,26 +124,6 @@ local function sorted_keys(t)
   end
   table.sort(ret)
   return ret
-end
-
---- Return a table that yields elements sorted by key when iterated over with pairs()
---  Should probably put this in a formatting library later.
---  Depends on keys() function defined above.
---@param  t    The table whose data should be used
---@return out  A table that can be passed to pairs() to get sorted results
-function sorted_by_key(t)
-  local out = {}
-  setmetatable(out, {
-    __pairs = function(_)
-      local order = sorted_keys(t)
-      return coroutine.wrap(function()
-        for i,k in ipairs(order) do
-          coroutine.yield(k, t[k])
-        end
-      end)
-    end
-  })
-  return out
 end
 
 postaction = function()
@@ -178,7 +164,7 @@ postaction = function()
   end
 
   if next(out) then
-    return sorted_by_key(out)
+    return outlib.sorted_by_key(out)
   end
 end
 

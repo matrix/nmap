@@ -19,9 +19,7 @@
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <config.h>
 
 #include <sys/param.h>
 #include <sys/file.h>
@@ -95,8 +93,8 @@ again:
 		case EWOULDBLOCK:
 			return (0);			/* XXX */
 		}
-		pcap_snprintf(p->errbuf, sizeof(p->errbuf),
-		    "read: %s", pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, sizeof(p->errbuf),
+		    errno, "read");
 		return (-1);
 	}
 	sh = (struct snoopheader *)p->buffer;
@@ -104,7 +102,7 @@ again:
 
 	/*
 	 * XXX - Sigh, snoop_packetlen is a 16 bit quantity.  If we
-	 * got a short length, but read a full sized snoop pakcet,
+	 * got a short length, but read a full sized snoop packet,
 	 * assume we overflowed and add back the 64K...
 	 */
 	if (cc == (p->snapshot + sizeof(struct snoopheader)) &&
@@ -126,7 +124,7 @@ again:
 	}
 
 	if (p->fcode.bf_insns == NULL ||
-	    bpf_filter(p->fcode.bf_insns, cp, datalen, caplen)) {
+	    pcapint_filter(p->fcode.bf_insns, cp, datalen, caplen)) {
 		struct pcap_pkthdr h;
 		++psn->stat.ps_recv;
 		h.ts.tv_sec = sh->snoop_timestamp.tv_sec;
@@ -140,7 +138,7 @@ again:
 }
 
 static int
-pcap_inject_snoop(pcap_t *p, const void *buf, size_t size)
+pcap_inject_snoop(pcap_t *p, const void *buf, int size)
 {
 	int ret;
 
@@ -150,8 +148,8 @@ pcap_inject_snoop(pcap_t *p, const void *buf, size_t size)
 	 */
 	ret = write(p->fd, buf, size);
 	if (ret == -1) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "send: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "send");
 		return (-1);
 	}
 	return (ret);
@@ -167,8 +165,8 @@ pcap_stats_snoop(pcap_t *p, struct pcap_stat *ps)
 	rs = &rawstats;
 	memset(rs, 0, sizeof(*rs));
 	if (ioctl(p->fd, SIOCRAWSTATS, (char *)rs) < 0) {
-		pcap_snprintf(p->errbuf, sizeof(p->errbuf),
-		    "SIOCRAWSTATS: %s", pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, sizeof(p->errbuf),
+		    errno, "SIOCRAWSTATS");
 		return (-1);
 	}
 
@@ -212,8 +210,8 @@ pcap_activate_snoop(pcap_t *p)
 
 	fd = socket(PF_RAW, SOCK_RAW, RAWPROTO_SNOOP);
 	if (fd < 0) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "snoop socket: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "snoop socket");
 		goto bad;
 	}
 	p->fd = fd;
@@ -228,14 +226,14 @@ pcap_activate_snoop(pcap_t *p)
 		 * they might be the same error, if they both end up
 		 * meaning "snoop doesn't know about that device".
 		 */
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "snoop bind: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "snoop bind");
 		goto bad;
 	}
 	memset(&sf, 0, sizeof(sf));
 	if (ioctl(fd, SIOCADDSNOOP, &sf) < 0) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "SIOCADDSNOOP: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "SIOCADDSNOOP");
 		goto bad;
 	}
 	if (p->opt.buffer_size != 0)
@@ -283,14 +281,14 @@ pcap_activate_snoop(pcap_t *p)
 		 * Classical IP devices?
 		 */
 		p->dlt_list = (u_int *) malloc(sizeof(u_int) * 2);
-		/*
-		 * If that fails, just leave the list empty.
-		 */
-		if (p->dlt_list != NULL) {
-			p->dlt_list[0] = DLT_EN10MB;
-			p->dlt_list[1] = DLT_DOCSIS;
-			p->dlt_count = 2;
+		if (p->dlt_list == NULL) {
+			pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+			    errno, "malloc");
+			goto bad;
 		}
+		p->dlt_list[0] = DLT_EN10MB;
+		p->dlt_list[1] = DLT_DOCSIS;
+		p->dlt_count = 2;
 	} else if (strncmp("ipg", p->opt.device, 3) == 0 ||
 		   strncmp("rns", p->opt.device, 3) == 0 ||	/* O2/200/2000 FDDI */
 		   strncmp("xpi", p->opt.device, 3) == 0) {
@@ -310,7 +308,7 @@ pcap_activate_snoop(pcap_t *p)
 		p->linktype = DLT_NULL;
 		ll_hdrlen = 4;
 	} else {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE,
+		snprintf(p->errbuf, PCAP_ERRBUF_SIZE,
 		    "snoop: unknown physical layer type");
 		goto bad;
 	}
@@ -323,6 +321,17 @@ pcap_activate_snoop(pcap_t *p)
 		return (PCAP_ERROR_RFMON_NOTSUP);
 	}
 
+	/*
+	 * Turn a negative snapshot value (invalid), a snapshot value of
+	 * 0 (unspecified), or a value bigger than the normal maximum
+	 * value, into the maximum allowed value.
+	 *
+	 * If some application really *needs* a bigger snapshot
+	 * length, we should just increase MAXIMUM_SNAPLEN.
+	 */
+	if (p->snapshot <= 0 || p->snapshot > MAXIMUM_SNAPLEN)
+		p->snapshot = MAXIMUM_SNAPLEN;
+
 #ifdef SIOCGIFMTU
 	/*
 	 * XXX - IRIX appears to give you an error if you try to set the
@@ -332,8 +341,8 @@ pcap_activate_snoop(pcap_t *p)
 	 */
 	(void)strncpy(ifr.ifr_name, p->opt.device, sizeof(ifr.ifr_name));
 	if (ioctl(fd, SIOCGIFMTU, (char *)&ifr) < 0) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "SIOCGIFMTU: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "SIOCGIFMTU");
 		goto bad;
 	}
 	/*
@@ -366,22 +375,22 @@ pcap_activate_snoop(pcap_t *p)
 	if (snooplen < 0)
 		snooplen = 0;
 	if (ioctl(fd, SIOCSNOOPLEN, &snooplen) < 0) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "SIOCSNOOPLEN: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "SIOCSNOOPLEN");
 		goto bad;
 	}
 	v = 1;
 	if (ioctl(fd, SIOCSNOOPING, &v) < 0) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "SIOCSNOOPING: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "SIOCSNOOPING");
 		goto bad;
 	}
 
 	p->bufsize = 4096;				/* XXX */
 	p->buffer = malloc(p->bufsize);
 	if (p->buffer == NULL) {
-		pcap_snprintf(p->errbuf, PCAP_ERRBUF_SIZE, "malloc: %s",
-		    pcap_strerror(errno));
+		pcapint_fmt_errmsg_for_errno(p->errbuf, PCAP_ERRBUF_SIZE,
+		    errno, "malloc");
 		goto bad;
 	}
 
@@ -392,25 +401,25 @@ pcap_activate_snoop(pcap_t *p)
 
 	p->read_op = pcap_read_snoop;
 	p->inject_op = pcap_inject_snoop;
-	p->setfilter_op = install_bpf_program;	/* no kernel filtering */
+	p->setfilter_op = pcapint_install_bpf_program;	/* no kernel filtering */
 	p->setdirection_op = NULL;	/* Not implemented. */
 	p->set_datalink_op = NULL;	/* can't change data link type */
-	p->getnonblock_op = pcap_getnonblock_fd;
-	p->setnonblock_op = pcap_setnonblock_fd;
+	p->getnonblock_op = pcapint_getnonblock_fd;
+	p->setnonblock_op = pcapint_setnonblock_fd;
 	p->stats_op = pcap_stats_snoop;
 
 	return (0);
  bad:
-	pcap_cleanup_live_common(p);
+	pcapint_cleanup_live_common(p);
 	return (PCAP_ERROR);
 }
 
 pcap_t *
-pcap_create_interface(const char *device _U_, char *ebuf)
+pcapint_create_interface(const char *device _U_, char *ebuf)
 {
 	pcap_t *p;
 
-	p = pcap_create_common(ebuf, sizeof (struct pcap_snoop));
+	p = PCAP_CREATE_COMMON(ebuf, struct pcap_snoop);
 	if (p == NULL)
 		return (NULL);
 
@@ -428,8 +437,29 @@ can_be_bound(const char *name _U_)
 	return (1);
 }
 
-int
-pcap_platform_finddevs(pcap_if_t **alldevsp, char *errbuf)
+static int
+get_if_flags(const char *name _U_, bpf_u_int32 *flags _U_, char *errbuf _U_)
 {
-	return (pcap_findalldevs_interfaces(alldevsp, errbuf, can_be_bound));
+	/*
+	 * Nothing we can do.
+	 * XXX - is there a way to find out whether an adapter has
+	 * something plugged into it?
+	 */
+	return (0);
+}
+
+int
+pcapint_platform_finddevs(pcap_if_list_t *devlistp, char *errbuf)
+{
+	return (pcapint_findalldevs_interfaces(devlistp, errbuf, can_be_bound,
+	    get_if_flags));
+}
+
+/*
+ * Libpcap version string.
+ */
+const char *
+pcap_lib_version(void)
+{
+	return (PCAP_VERSION_STRING);
 }

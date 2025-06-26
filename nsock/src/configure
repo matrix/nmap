@@ -3672,8 +3672,6 @@ $as_echo "#define HAVE_PCAP 1" >>confdefs.h
 fi
 
 
-PCAP_DEFINE_NETMASK_UNKNOWN
-
   ax_have_epoll_cppflags="${CPPFLAGS}"
   ac_fn_c_check_header_mongrel "$LINENO" "linux/version.h" "ac_cv_header_linux_version_h" "$ac_includes_default"
 if test "x$ac_cv_header_linux_version_h" = xyes; then :
@@ -4696,6 +4694,19 @@ fi
 
 done
 
+for ac_header in linux/vm_sockets.h
+do :
+  ac_fn_c_check_header_compile "$LINENO" "linux/vm_sockets.h" "ac_cv_header_linux_vm_sockets_h" "#include <sys/socket.h>
+"
+if test "x$ac_cv_header_linux_vm_sockets_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LINUX_VM_SOCKETS_H 1
+_ACEOF
+
+fi
+
+done
+
 
 # We test whether they specified openssl desires explicitly
 use_openssl="yes"
@@ -4903,81 +4914,6 @@ if test "$use_openssl" = "yes"; then
 $as_echo "#define HAVE_OPENSSL 1" >>confdefs.h
 
   OPENSSL_LIBS="-lssl -lcrypto"
-  LIBS_TMP="$LIBS"
-  LIBS="$OPENSSL_LIBS $LIBS"
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for SSL_set_tlsext_host_name" >&5
-$as_echo_n "checking for SSL_set_tlsext_host_name... " >&6; }
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-#include <openssl/ssl.h>
-int
-main ()
-{
-SSL_set_tlsext_host_name(NULL, NULL)
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; };
-$as_echo "#define HAVE_SSL_SET_TLSEXT_HOST_NAME 1" >>confdefs.h
-
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for DTLS_client_method" >&5
-$as_echo_n "checking for DTLS_client_method... " >&6; }
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-#include <openssl/ssl.h>
-int
-main ()
-{
-DTLS_client_method()
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; };
-$as_echo "#define HAVE_DTLS_CLIENT_METHOD 1" >>confdefs.h
-
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for SSL_set_alpn_protos" >&5
-$as_echo_n "checking for SSL_set_alpn_protos... " >&6; }
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-#include <openssl/ssl.h>
-int
-main ()
-{
-SSL_set_alpn_protos(NULL, NULL, 0)
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; };
-$as_echo "#define HAVE_ALPN_SUPPORT 1" >>confdefs.h
-
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-  LIBS="$LIBS_TMP"
 
 fi
 

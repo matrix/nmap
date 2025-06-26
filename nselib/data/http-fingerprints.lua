@@ -15,6 +15,7 @@ local table = require "table"
 --  https://nmap.org/book/man-legal.html
 --
 -- @args http-fingerprints.nikto-db-path Looks at the given path for nikto database.
+--       The database is expected to be a CSV file structured as nikto "db_tests".
 --       It then converts the records in nikto's database into our Lua table format
 --       and adds them to our current fingerprints if they don't exist already.
 --       Unfortunately, our current implementation has some limitations:
@@ -1220,6 +1221,10 @@ table.insert(fingerprints, {
       },
       {
         path = '/wp-login.php',
+        method = 'HEAD'
+      },
+      {
+        path = '/wp-json',
         method = 'HEAD'
       },
       {
@@ -4717,6 +4722,14 @@ table.insert(fingerprints, {
         method = 'GET'
       },
       {
+        path = '/healthcheck/',
+        method = 'GET'
+      },
+      {
+        path = '/healthchecks/',
+        method = 'GET'
+      },
+      {
         path = '/loggers/',
         method = 'GET'
       },
@@ -5296,7 +5309,143 @@ table.insert(fingerprints, {
         output = "WebSphere Commerce"
       },
     }
-  })
+  });
+
+table.insert(fingerprints, {
+    category = 'management',
+    probes = {
+      {
+        path = '/rest/applinks/1.0/manifest',
+        method = 'GET'
+      },
+      {
+        path = '/jira/rest/applinks/1.0/manifest',
+        method = 'GET'
+      },
+      {
+        path = '/secure/rest/applinks/1.0/manifest',
+        method = 'GET'
+      },
+    },
+    matches = {
+      {
+        match = '<typeId>jira</typeId>.*<version>([^<]+)</version>',
+        output = 'Atlassian Jira \\1'
+      }
+    }
+  });
+
+table.insert(fingerprints, {
+    category = 'management',
+    probes = {
+      {
+        path = '/rest/servicedeskapi/info',
+        method = 'GET'
+      },
+      {
+        path = '/jira/rest/servicedeskapi/info',
+        method = 'GET'
+      },
+      {
+        path = '/secure/rest/servicedeskapi/info',
+        method = 'GET'
+      },
+    },
+    matches = {
+      {
+        match = '"version":%s*"([^-"]+)',
+        output = 'Atlassian Jira Service Desk \\1'
+      }
+    }
+  });
+
+table.insert(fingerprints, {
+    category = 'management',
+    probes = {
+      {
+        path = '/rest/applinks/1.0/manifest',
+        method = 'GET'
+      },
+      {
+        path = '/confluence/rest/applinks/1.0/manifest',
+        method = 'GET'
+      },
+      {
+        path = '/wiki/rest/applinks/1.0/manifest',
+        method = 'GET'
+      },
+    },
+    matches = {
+      {
+        match = '<typeId>confluence</typeId>.*<version>([^<]+)</version>',
+        output = 'Atlassian Confluence \\1'
+      }
+    }
+  });
+
+table.insert(fingerprints, {
+    category = 'management',
+    probes = {
+      {
+        path = '/rest/applinks/1.0/manifest',
+        method = 'GET'
+      },
+      {
+        path = '/bitbucket/rest/applinks/1.0/manifest',
+        method = 'GET'
+      },
+    },
+    matches = {
+      {
+        match = '<typeId>stash</typeId>.*<version>([^<]+)</version>',
+        output = 'Atlassian Bitbucket Server \\1'
+      },
+      {
+        match = '<typeId>bitbucket</typeId>.*<version>([^<]+)</version>',
+        output = 'Atlassian Bitbucket Server \\1'
+      }
+    }
+  });
+
+table.insert(fingerprints, {
+    category = 'management',
+    probes = {
+      {
+        path = '/rest/applinks/1.0/manifest',
+        method = 'GET'
+      },
+      {
+        path = '/bamboo/rest/applinks/1.0/manifest',
+        method = 'GET'
+      },
+    },
+    matches = {
+      {
+        match = '<typeId>bamboo</typeId>.*<version>([^<]+)</version>',
+        output = 'Atlassian Bamboo \\1'
+      }
+    }
+  });
+
+table.insert(fingerprints, {
+    category = 'management',
+    probes = {
+      {
+        path = '/rest/applinks/1.0/manifest',
+        method = 'GET'
+      },
+      {
+        path = '/crowd/rest/applinks/1.0/manifest',
+        method = 'GET'
+      },
+    },
+    matches = {
+      {
+        match = '<typeId>crowd</typeId>.*<version>([^<]+)</version>',
+        output = 'Atlassian Crowd \\1'
+      }
+    }
+  });
 
 ------------------------------------------------
 ----     PRINTERS, WEBCAMS, PROJECTORS      ----
@@ -6233,6 +6382,22 @@ table.insert(fingerprints, {
     }
   });
 
+table.insert(fingerprints, {
+    category = 'database',
+    probes = {
+      {
+        path = '/_api/version',
+        method = 'GET'
+      }
+    },
+    matches = {
+      {
+        match = '"server":"arango",.-"version":"([^"])"',
+        output = 'ArangoDB \\1'
+      }
+    }
+  });
+
 ------------------------------------------------
 ----              MICROSOFT                 ----
 ------------------------------------------------
@@ -6951,7 +7116,7 @@ table.insert(fingerprints, {
     matches = {
       {
         match = '200',
-        output = 'Possible DD-WRT router Information Disclosure (OSVDB 70230)'
+        output = 'Possible DD-WRT router Information Disclosure (BID 45598)'
       }
     }
   });
@@ -7150,6 +7315,77 @@ table.insert(fingerprints, {
     }
   });
 
+table.insert(fingerprints, {
+    category = 'attacks',
+    probes = {
+      {
+        path = '/uir//etc/passwd',
+        method = 'GET'
+      }
+    },
+    matches = {
+      {
+        match = '200',
+        output = 'Possible D-Link router directory traversal vulnerability (CVE-2018-10822)'
+      },
+      {
+        match = 'root:',
+	output = 'D-Link router directory traversal vulnerability (CVE-2018-10822)'
+      }
+     }
+  });
+
+table.insert(fingerprints, {
+    category = 'attacks',
+    probes = {
+      {
+        path = '/uir//tmp/csman/0',
+        method = 'GET'
+      }
+    },
+    matches = {
+      {
+        match = '200',
+        output = 'Possible D-Link router plaintext password file exposure (CVE-2018-10824)'
+      }
+    }
+  });
+
+table.insert(fingerprints, {
+    category = 'attacks',
+    probes = {
+      {
+        path = '/cgi-bin/export_debug_msg.exp',
+        method = 'GET'
+      },
+      {
+        path = '/cgi-bin/config.exp',
+        method = 'GET'
+      }
+    },
+    matches = {
+      {
+        match = '200 OK',
+        output = 'Cisco RV320/RV325 Unauthenticated Diagnostic Data & Configuration Export (CVE-2019-1653)'
+      }
+    }
+  });
+
+table.insert(fingerprints, {
+    category = 'attacks',
+    probes = {
+      {
+        path = '/',
+        method = 'GET'
+      }
+    },
+    matches = {
+      {
+        match = 'var admin_name=".*";\nvar guest_name=".*";\nvar admin_pwd=".*";',
+        output = 'Cisco RV110W Wireless-N VPN Firewall Password Disclosure (CVE-2014-0683)'
+      }
+    }
+  });
 ------------------------------------------------
 ----        Open Source CMS checks          ----
 ------------------------------------------------
@@ -8903,6 +9139,27 @@ table.insert(fingerprints, {
     }
   });
 
+-- Bitwarden Vault
+table.insert(fingerprints, {
+    category = 'general',
+    probes = {
+      {
+        path = '/manifest.json',
+        method = 'GET'
+      }
+    },
+    matches = {
+      {
+        match = '([\'"])name%1%s*:%s*[\'"][Bb]itwarden',
+        output = 'Bitwarden Vault Manifest File'
+      },
+      {
+        match = '',
+        output = 'Manifest JSON File'
+      },
+    }
+  });
+
 ------------------------------------------------
 ----           UNCATEGORIZED                ----
 ------------------------------------------------
@@ -9297,6 +9554,14 @@ table.insert(fingerprints, {
       },
       {
         path = '/apache/',
+        method = 'GET'
+      },
+      {
+        path = '/api/',
+        method = 'GET'
+      },
+      {
+        path = '/api-docs/',
         method = 'GET'
       },
       {
@@ -10173,6 +10438,10 @@ table.insert(fingerprints, {
       },
       {
         path = '/enviamail/',
+        method = 'GET'
+      },
+      {
+        path = '/error.html',
         method = 'GET'
       },
       {
@@ -12495,10 +12764,12 @@ local stdnse = require "stdnse"
 local nmap = require "nmap"
 
 nikto_db_path = stdnse.get_script_args("http-fingerprints.nikto-db-path") or "db_tests"
-local f = nmap.fetchfile(nikto_db_path) or io.open(nikto_db_path, "r")
+nikto_db_path = nmap.fetchfile(nikto_db_path) or nikto_db_path
+local f = io.open(nikto_db_path, "r")
 
 if f then
 
+  f:close()
   stdnse.debug1("Found nikto db.")
 
   local nikto_db = {}
